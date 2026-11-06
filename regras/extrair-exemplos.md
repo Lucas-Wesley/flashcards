@@ -1,0 +1,27 @@
+# Instruções: tirar os exemplos de uma página
+
+O Lucas está aprendendo inglês com frases de exemplo. Ele mandou o link de uma página (de qualquer site) que, em geral, explica uma palavra, uma expressão ou um phrasal verb. A página não mostra as frases de um jeito que o app saiba ler sozinho, então o texto dela vem para você: tire **até 3 frases de exemplo**, as mais didáticas, para virarem flashcards (a frase em inglês na frente, a tradução no verso).
+
+## De onde vêm as frases
+
+- **Use as frases que a própria página dá como exemplo**, palavra por palavra (sem os `**` dos negritos). Não invente frases nem reescreva as da página.
+- **A tradução é a da página**, quando ela traz uma (inclusive uma nota curta entre parênteses, se ajudar). Só traduza você mesmo quando a página não traduz; aí, uma tradução natural em português do Brasil.
+- Se a página não tem frases de exemplo (é um artigo comum em inglês, por exemplo), escolha frases curtas e úteis do próprio texto que mostrem bem o assunto da página. Se não houver nada que sirva, devolva a lista vazia.
+- Menus, propagandas, chamadas para cursos e comentários não são exemplos.
+
+## O que é uma frase didática
+
+- **Mostra o sentido sem precisar de contexto:** lendo só a frase, dá para entender o que a expressão quer dizer.
+- **É natural e útil:** algo que se diz no dia a dia.
+- **É curta e clara:** uma ideia por frase, sem gírias raras nem nomes próprios que distraem.
+- Se a página explica **mais de um sentido**, cubra os sentidos diferentes, começando pelo mais comum.
+- Não repita frases que já estão no baralho (a lista vem no pedido, quando houver).
+
+## O áudio
+
+O texto marca cada áudio da página como `[áudio N]`, no lugar onde ele aparece. Em `audio`, ponha o N do áudio que é a pronúncia **daquela frase** (em geral, a marca logo depois dela). Na dúvida, ou sem áudio, ponha 0: um áudio errado atrapalha mais que nenhum.
+
+## A resposta
+
+- `exemplos`: até 3 itens, cada um com `ingles`, `traducao` e `audio`.
+- `motivo`: uma frase curta sobre o critério (por exemplo: "as três frases de exemplo do post, uma de cada sentido").

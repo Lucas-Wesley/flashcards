@@ -46,21 +46,31 @@ func novoAmbiente(t *testing.T) *ambiente {
 
 	// Wikipédia falsa: a busca acha o artigo do Lula com foto; a foto é um PNG de verdade.
 	e.wiki = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// O mesmo servidor faz o papel do site do Mairo Vergara.
+		// O mesmo servidor faz o papel dos sites dos links.
 		switch {
 		case r.URL.Path == "/foto.png":
 			w.Write(pngDeTeste)
 			return
 		case r.URL.Path == "/shoot-up/":
 			// Sete exemplos: a IA escolhe os 3 mais didáticos.
-			fmt.Fprint(w, "<html><head><title>Shoot Up | O que significa este phrasal verb? - Mairo Vergara</title></head><body><h1>Shoot Up</h1>")
+			fmt.Fprint(w, "<html><head><title>Shoot Up | O que significa este phrasal verb? - Blog de Inglês</title></head><body><h1>Shoot Up</h1>")
 			for i := 1; i <= 7; i++ {
 				fmt.Fprintf(w, `<p><em><strong>Example %d shot up.</strong><br>Exemplo %d disparou.</em></p><figure class="wp-block-audio"><audio src="/audio/%02d.mp3"></audio></figure>`, i, i, i)
 			}
 			fmt.Fprint(w, "</body></html>")
 		case r.URL.Path == "/run-into/":
-			pagina, _ := os.ReadFile("testdata/mairo.html")
+			pagina, _ := os.ReadFile("testdata/frases.html")
 			w.Write(bytes.ReplaceAll(pagina, []byte("https://SITE"), []byte(e.wiki.URL)))
+			return
+		case r.URL.Path == "/artigo/":
+			// Um site que não mostra as frases do jeito comum: a IA tira os exemplos do texto.
+			fmt.Fprint(w, `<html><head><title>Break the Ice – Inglês Diário</title><script>var x = "não é texto";</script></head><body>
+				<nav>Menu do site</nav><article><h1>Break the Ice</h1><p>Usamos <b>break the ice</b> para quebrar o gelo.</p>
+				<ul><li>Exemplo: <i>He told a joke to break the ice.</i> (Ele contou uma piada para quebrar o gelo.)</li></ul>
+				<audio><source src="/audio/gelo.mp3"></audio><footer>Rodapé</footer></article></body></html>`)
+			return
+		case r.URL.Path == "/vazia/":
+			fmt.Fprint(w, "<html><head><title>Nada</title></head><body><nav>Menu</nav></body></html>")
 			return
 		case strings.HasPrefix(r.URL.Path, "/audio/"):
 			w.Write(append([]byte("ID3\x04\x00\x00\x00\x00\x00\x00"), r.URL.Path...))
@@ -103,7 +113,7 @@ func novoAmbiente(t *testing.T) *ambiente {
 	dados := t.TempDir()
 	e.dados = dados
 	cfg := config{dados: dados, regras: absoluto("../regras"), claude: absoluto("testdata/claude-falso"),
-		wiki: e.wiki.URL + "/w/api.php", commons: e.wiki.URL + "/commons/api.php", openverse: e.wiki.URL + "/openverse/", hostsDeImagem: []string{wikiURL.Host}, sitesMairo: []string{wikiURL.Host}}
+		wiki: e.wiki.URL + "/w/api.php", commons: e.wiki.URL + "/commons/api.php", openverse: e.wiki.URL + "/openverse/", hostsDeImagem: []string{wikiURL.Host}}
 	a, err := novoApp(db, novoRelogio(fuso, func() time.Time { return e.agora }), cfg)
 	if err != nil {
 		t.Fatal(err)

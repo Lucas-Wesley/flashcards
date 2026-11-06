@@ -3,7 +3,7 @@
 App do **ecossistema de apps pessoais do Lucas**: flashcards com repetição espaçada, no estilo do
 Anki, simplificado. É o **3º app** (depois da Biblioteca Digital e do Acervo; ver ROADMAP do Hub).
 
-**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F30) e próximos passos.
+**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F31) e próximos passos.
 
 ## Em uma frase
 Baralhos → notas (frente e verso, ou nos dois sentidos) → cartões agendados pelo **FSRS-6**
@@ -24,8 +24,8 @@ Mesma infraestrutura e mesmo design system (`docs/DESIGN-SYSTEM.md`) da Bibliote
   `--cacert ../certs/homelab-ca.crt`). Se estiver editada, levar a edição para `regras/` e só então
   voltar a do servidor ao padrão (`DELETE`), para nada se perder.
 - Imagens só da Wikimedia e do Openverse (F19, F27); para aceitar outro servidor, mudar `HOSTS_DE_IMAGEM` com cuidado.
-- **Links de sites novos:** cada site tem um leitor próprio em `links.go` (F21). O Lucas avisa antes;
-  baixar a página, ver a estrutura e escrever o leitor com teste (sem copiar o texto do site para o repositório).
+- **Links de qualquer site** (F31): um leitor só em `links.go`, sem nada específico de um site (nem no código, nem nos
+  testes, nem na documentação); o que ele não lê, a IA tira do texto (`regras/extrair-exemplos.md`).
 - Integração com Biblioteca/Acervo só quando os dois lados existirem; **não definir o contrato comum antes**. O Acervo já
   manda textos (`POST /api/textos`, F28, F30): mudar esse endpoint é mudar os dois apps.
 - A **extensão do Chrome** (repo `home-lab-plugin-web`) usa `POST /api/links` e `GET /api/baralhos`:

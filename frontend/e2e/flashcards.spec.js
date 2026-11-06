@@ -82,7 +82,7 @@ test('busca, edita e suspende um cartão', async ({ page }) => {
 
 test('monta cartões a partir de um link compartilhado', async ({ page }) => {
   // O "Compartilhar" do Android abre o app com o link na URL.
-  const link = 'http://localhost:8096/mairo.html'
+  const link = 'http://localhost:8096/frases.html'
   await page.goto(`/?text=${encodeURIComponent('Olha isso ' + link)}`)
   await expect(page.getByRole('heading', { name: 'Adicionar' })).toBeVisible()
   await expect(page.getByLabel('Link')).toHaveValue(link)
@@ -93,8 +93,11 @@ test('monta cartões a partir de um link compartilhado', async ({ page }) => {
   await expect(page.getByText('3 frases de exemplo de “Run Into”, 2 com áudio.')).toBeVisible()
   await expect(page.getByLabel('Frente do cartão 1')).toHaveValue('I ran into an old friend yesterday.')
   await expect(page.getByLabel('Áudio do cartão 1')).toBeAttached()
+  // O baralho pode ser trocado na revisão; fica o escolhido no pedido.
+  await expect(page.getByLabel('Baralho', { exact: true }).locator('option:checked')).toHaveText('Inglês')
+  await expect(page.getByLabel('Nome do baralho novo')).toHaveCount(0)
   await page.getByRole('button', { name: 'Adicionar 3 ao baralho' }).click()
-  // O áudio do terceiro aponta para fora do site conhecido: o cartão entra sem ele.
+  // O áudio do terceiro aponta para um servidor que não existe: o cartão entra sem ele.
   await expect(page.getByText('3 notas criadas; 1 áudio não veio.')).toBeVisible()
 
   await page.goto('/#/cartoes')

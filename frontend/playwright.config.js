@@ -28,14 +28,13 @@ export default defineConfig({
             CLAUDE_BIN: path.join(testdata, 'claude-falso'),
             REGRAS_DIR: path.resolve('../regras'),
             WIKI_API: 'http://127.0.0.1:9/w/api.php',
-            SITES_MAIRO: 'localhost:8096',
           },
           url: 'http://localhost:8095/api/health',
         },
         {
-          // Um "site do Mairo Vergara" falso: a página de teste e um áudio.
+          // Um site falso para os links: a página de teste e um áudio.
           command: `python3 -m http.server 8096 --bind 127.0.0.1 --directory "${testdata}"`,
-          url: 'http://localhost:8096/mairo.html',
+          url: 'http://localhost:8096/frases.html',
         },
         {
           // A versão de produção, com service worker, como no servidor.

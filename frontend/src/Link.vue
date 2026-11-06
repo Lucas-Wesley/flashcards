@@ -3,9 +3,9 @@ import { inject, onMounted, ref } from 'vue'
 import AbasAdicionar from './AbasAdicionar.vue'
 import { api, lembrar } from './api.js'
 
-// Cartões a partir de um link (por enquanto, do site do Mairo Vergara): o servidor lê as frases
-// de exemplo com a tradução e o áudio e monta uma proposta para revisar. Chega aqui também pelo
-// "Compartilhar" do celular, com o link já preenchido.
+// Cartões a partir de um link de qualquer site: o servidor lê as frases de exemplo com a tradução
+// e o áudio (ou a IA as tira do texto) e monta uma proposta para revisar. Chega aqui também pelo
+// "Compartilhar" do celular, com o link já preenchido. O baralho começa no último usado ou no "Inglês".
 const props = defineProps({ link: { type: String, default: '' } })
 const recado = inject('recado')
 
@@ -36,7 +36,9 @@ onMounted(async () => {
     // Sem a lista, vai para um baralho novo.
   }
   const ultimo = lembrar('baralho-link')
-  if (baralhos.value.some((b) => b.id === ultimo)) destino.value = ultimo
+  const semAcento = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+  if (ultimo === 'novo') return
+  destino.value = (baralhos.value.find((b) => b.id === ultimo) ?? baralhos.value.find((b) => semAcento(b.nome) === 'ingles'))?.id ?? ''
 })
 </script>
 
@@ -45,15 +47,16 @@ onMounted(async () => {
     <h1>Adicionar</h1>
     <AbasAdicionar atual="link" />
     <p class="suave explicacao">
-      Cole o link de um post do <strong>Mairo Vergara</strong>. Das frases de exemplo, as <strong>3 mais didáticas</strong> viram cartões (quando há
-      mais que isso, a IA escolhe, sem mudar nada nelas): a frase em inglês na frente, com o áudio, e a tradução no verso. Você revisa antes de entrarem no baralho. No celular, dá para usar o <strong>Compartilhar</strong> do navegador direto
+      Cole o link de uma página que explica uma palavra ou expressão em inglês. Das frases de exemplo, as <strong>3 mais didáticas</strong> viram
+      cartões (quando há mais que isso, a IA escolhe; quando a página não as mostra do jeito comum, a IA as tira do texto): a frase em inglês na
+      frente, com o áudio, se a página tiver, e a tradução no verso. Você revisa antes de entrarem no baralho. No celular, dá para usar o <strong>Compartilhar</strong> do navegador direto
       para o app.
     </p>
 
     <form class="formulario" @submit.prevent="ler">
       <label>
         <span class="rotulo-campo">Link</span>
-        <input v-model="url" class="campo" type="url" inputmode="url" placeholder="https://www.mairovergara.com/…" aria-label="Link" />
+        <input v-model="url" class="campo" type="url" inputmode="url" placeholder="https://…" aria-label="Link" />
       </label>
       <div class="dupla">
         <label>

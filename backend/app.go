@@ -22,9 +22,6 @@ type config struct {
 	commons       string
 	openverse     string
 	hostsDeImagem []string
-	// Sites de onde o app sabe tirar cartões de um link (o leitor do Mairo Vergara). O áudio das
-	// frases também vem deles.
-	sitesMairo []string
 }
 
 func configDoAmbiente(dados string) config {
@@ -37,7 +34,6 @@ func configDoAmbiente(dados string) config {
 		commons:       env("COMMONS_API", "https://commons.wikimedia.org/w/api.php"),
 		openverse:     env("OPENVERSE_API", "https://api.openverse.org/v1/images/"),
 		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
-		sitesMairo:    strings.Split(env("SITES_MAIRO", "www.mairovergara.com,mairovergara.com"), ","),
 	}
 }
 

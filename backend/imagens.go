@@ -49,9 +49,10 @@ func (a *app) baixarImagem(ctx context.Context, endereco string) (string, error)
 	return a.guardarImagem(r)
 }
 
-// baixarAudio traz a pronúncia de uma frase, só dos sites que o app sabe ler (o do Mairo Vergara).
+// baixarAudio traz a pronúncia de uma frase. Quem chama confere antes que o endereço é um dos áudios
+// que o leitor achou na página do link; o servidor pode ser qualquer um.
 func (a *app) baixarAudio(ctx context.Context, endereco string) (string, error) {
-	r, err := baixar(ctx, endereco, a.cfg.sitesMairo, "só dá para baixar áudios dos sites conhecidos")
+	r, err := baixar(ctx, endereco, nil, "endereço de áudio inválido")
 	if err != nil {
 		return "", err
 	}
@@ -67,9 +68,10 @@ func (a *app) baixarAudio(ctx context.Context, endereco string) (string, error) 
 	return a.guardarMidia(dados, "mp3")
 }
 
+// baixar traz um arquivo de um dos hosts permitidos (nil: de qualquer um).
 func baixar(ctx context.Context, endereco string, hosts []string, recusa string) (io.ReadCloser, error) {
 	u, err := url.Parse(endereco)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || !slices.Contains(hosts, u.Host) {
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || (hosts != nil && !slices.Contains(hosts, u.Host)) {
 		return nil, errors.New(recusa)
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
@@ -86,7 +88,7 @@ func baixar(ctx context.Context, endereco string, hosts []string, recusa string)
 		return nil, fmt.Errorf("o arquivo não veio: %d", res.StatusCode)
 	}
 	// Um redirecionamento não pode levar para fora dos servidores permitidos.
-	if !slices.Contains(hosts, res.Request.URL.Host) {
+	if hosts != nil && !slices.Contains(hosts, res.Request.URL.Host) {
 		res.Body.Close()
 		return nil, errors.New(recusa)
 	}

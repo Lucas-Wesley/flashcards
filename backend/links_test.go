@@ -11,8 +11,8 @@ import (
 	"golang.org/x/net/html"
 )
 
-func TestLeitorDoMairoVergara(t *testing.T) {
-	arquivo, err := os.Open("testdata/mairo.html")
+func TestLeitorDeFrasesComTraducao(t *testing.T) {
+	arquivo, err := os.Open("testdata/frases.html")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,14 +21,14 @@ func TestLeitorDoMairoVergara(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base, _ := url.Parse("https://www.mairovergara.com/run-into-o-que-significa/")
-	titulo, frases := lerMairoVergara(pagina, base)
+	base, _ := url.Parse("https://blog.exemplo.com/run-into-o-que-significa/")
+	titulo, frases := lerFrasesComTraducao(pagina, base)
 	if titulo != "Run Into" {
 		t.Errorf("título: %q", titulo)
 	}
 	// A "resposta rápida", o título do sentido e o "Baixe o material" não são exemplos.
 	esperadas := []fraseDeExemplo{
-		{"I ran into an old friend yesterday.", "Eu encontrei um velho amigo por acaso ontem.", "https://www.mairovergara.com/audio/01-ran-into.mp3?t=1"},
+		{"I ran into an old friend yesterday.", "Eu encontrei um velho amigo por acaso ontem.", "https://blog.exemplo.com/audio/01-ran-into.mp3?t=1"},
 		{"Guess who I ran into at the store.", "Adivinha quem eu encontrei no mercado.\n(Também se diz bump into.)", ""},
 		{"The project ran into problems.", "O projeto esbarrou em problemas.", "https://SITE/audio/03-problems.mp3"},
 	}
@@ -92,11 +92,14 @@ func TestCartoesDeUmLink(t *testing.T) {
 		t.Fatalf("baralho novo: %+v", g.Proposta)
 	}
 
-	if s := e.pedir("POST", "/api/links", map[string]string{"url": "https://exemplo.com/x"}, nil); s != http.StatusBadRequest {
-		t.Errorf("site desconhecido: %d", s)
+	if s := e.pedir("POST", "/api/links", map[string]string{"url": "ftp://exemplo.com/x"}, nil); s != http.StatusBadRequest {
+		t.Errorf("não é link: %d", s)
 	}
 	if s := e.pedir("POST", "/api/links", map[string]string{"url": e.wiki.URL + "/foto.png"}, nil); s != http.StatusBadRequest {
-		t.Errorf("página sem frases: %d", s)
+		t.Errorf("link de uma imagem: %d", s)
+	}
+	if s := e.pedir("POST", "/api/links", map[string]string{"url": e.wiki.URL + "/vazia/"}, nil); s != http.StatusBadRequest {
+		t.Errorf("página sem texto: %d", s)
 	}
 	if s := e.pedir("POST", "/api/notas", dadosDaNota{BaralhoID: b.ID, Frente: "x", Audio: "../x.mp3"}, nil); s != http.StatusBadRequest {
 		t.Errorf("áudio inválido aceito: %d", s)
@@ -139,5 +142,76 @@ func TestLinkComMuitasFrasesAIAEscolheAsMaisDidaticas(t *testing.T) {
 	}
 	if g = e.esperarGeracao(g.ID, emRevisao); len(g.Proposta.Cartoes) != 3 {
 		t.Errorf("nova escolha: %+v", g.Proposta)
+	}
+}
+
+func TestTextoDaPagina(t *testing.T) {
+	pagina, _ := html.Parse(strings.NewReader(`<html><head><title>T</title><style>p{}</style></head><body><nav>Menu</nav>
+		<main><p>Use <strong>break the ice</strong> assim:</p><audio src="/a.mp3"></audio><p>Fim.</p><audio src="/a.mp3"></audio></main></body></html>`))
+	base, _ := url.Parse("https://site.exemplo/post/")
+	texto, audios := textoDaPagina(pagina, base)
+	if texto != "Use **break the ice** assim:\n[áudio 1] Fim." || len(audios) != 1 || audios[0] != "https://site.exemplo/a.mp3" {
+		t.Errorf("texto: %q, áudios: %v", texto, audios)
+	}
+	if semNomeDoSite("Break the Ice – Inglês Diário") != "Break the Ice" {
+		t.Error("nome do site no título")
+	}
+}
+
+func TestPaginaSemFrasesProntasAIATiraOsExemplos(t *testing.T) {
+	e := novoAmbiente(t)
+	ingles := e.criarBaralho("Inglês")
+	outro := e.criarBaralho("Bandeiras")
+	var g geracao
+	if s := e.pedir("POST", "/api/links", map[string]string{"url": e.wiki.URL + "/artigo/", "baralho_id": outro.ID}, &g); s != http.StatusCreated {
+		t.Fatalf("link: %d", s)
+	}
+	if g.Estado != naFila {
+		t.Fatalf("pedido na fila: %+v", g)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+	p := g.Proposta
+	if p.NomeBaralho != "Break the Ice" || len(p.Cartoes) != 2 {
+		t.Fatalf("proposta: %+v", p)
+	}
+	c := p.Cartoes[0]
+	if c.Frente != "He told a joke to break the ice." || c.Verso != "Ele contou uma piada para quebrar o gelo." ||
+		!strings.HasSuffix(c.AudioURL, "/audio/gelo.mp3") || p.Cartoes[1].AudioURL != "" || c.Tags != "break-the-ice" {
+		t.Errorf("cartão: %+v / %+v", c, p.Cartoes[1])
+	}
+	if !strings.Contains(p.Observacoes, "tiradas pela IA de “Break the Ice”") || !strings.Contains(p.Observacoes, "Recebeu o texto da página.") ||
+		strings.Contains(p.Observacoes, "Menu do site") {
+		t.Errorf("observações: %q", p.Observacoes)
+	}
+
+	// Na revisão, o baralho muda para o Inglês; um áudio que não veio da página não é baixado.
+	cartoes := p.Cartoes
+	cartoes[1].AudioURL = e.wiki.URL + "/audio/outro.mp3"
+	id := strconv.FormatInt(g.ID, 10)
+	var res struct {
+		BaralhoID string `json:"baralho_id"`
+		SemAudio  int    `json:"sem_audio"`
+	}
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"baralho_id": "nao-existe", "cartoes": cartoes}, nil); s != http.StatusBadRequest {
+		t.Errorf("baralho inválido: %d", s)
+	}
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"baralho_id": ingles.ID, "cartoes": cartoes}, &res); s != http.StatusOK {
+		t.Fatalf("aprovar: %d", s)
+	}
+	if res.BaralhoID != ingles.ID || res.SemAudio != 1 {
+		t.Errorf("aprovado em: %+v", res)
+	}
+	if es := e.estudo(ingles.ID); es.Cartao == nil || !nomeDeAudio.MatchString(es.Cartao.Audio) {
+		t.Errorf("estudo no Inglês: %+v", es.Cartao)
+	}
+
+	// Pedido para o Inglês, aprovado num baralho novo escolhido na revisão.
+	e.pedir("POST", "/api/links", map[string]string{"url": e.wiki.URL + "/run-into/", "baralho_id": ingles.ID}, &g)
+	id = strconv.FormatInt(g.ID, 10)
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"baralho_id": "", "cartoes": g.Proposta.Cartoes}, nil); s != http.StatusBadRequest {
+		t.Errorf("baralho novo sem nome: %d", s)
+	}
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"baralho_id": "", "nome_baralho": "Phrasal verbs", "cartoes": g.Proposta.Cartoes}, &res); s != http.StatusOK || res.BaralhoID == ingles.ID {
+		t.Errorf("baralho novo: %d %+v", s, res)
 	}
 }

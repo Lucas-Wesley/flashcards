@@ -491,10 +491,10 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 			erroJSON(w, http.StatusBadRequest, "Peça de 1 a 100 cartões.")
 			return
 		}
-		// Um link só é refeito quando a IA escolheu as frases (a página tinha mais de 3).
+		// Um link só é refeito quando passou pela IA (a página tinha mais de 3 frases, ou não as mostrava prontas).
 		if g, err := a.geracao(ctx, id); err == nil && g.Origem == "link" {
 			var p paginaDoLink
-			if json.Unmarshal([]byte(g.Texto), &p) != nil || len(p.Frases) <= exemplosPorPagina {
+			if json.Unmarshal([]byte(g.Texto), &p) != nil || (p.Texto == "" && len(p.Frases) <= exemplosPorPagina) {
 				erroJSON(w, http.StatusConflict, "Este link não passou pela IA: não há o que refazer.")
 				return
 			}
@@ -534,6 +534,8 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var corpo struct {
+		// BaralhoID: o baralho escolhido na revisão ("" = um novo, com NomeBaralho); sem ele, o do pedido.
+		BaralhoID   *string          `json:"baralho_id"`
 		NomeBaralho string           `json:"nome_baralho"`
 		Cartoes     []cartaoProposto `json:"cartoes"`
 	}
@@ -563,10 +565,25 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "Nenhum cartão escolhido. Para não aproveitar nada, descarte a proposta.")
 		return
 	}
+	baralhoID := g.BaralhoID
+	if corpo.BaralhoID != nil {
+		baralhoID = *corpo.BaralhoID
+		if baralhoID != "" && !a.existeBaralho(ctx, baralhoID) {
+			erroJSON(w, http.StatusBadRequest, "Baralho não encontrado.")
+			return
+		}
+	}
 	nome := strings.TrimSpace(corpo.NomeBaralho)
-	if g.BaralhoID == "" && nome == "" {
+	if baralhoID == "" && nome == "" {
 		erroJSON(w, http.StatusBadRequest, "Dê um nome ao baralho.")
 		return
+	}
+	// Áudio só dos endereços que vieram na proposta (os que o leitor achou na página do link).
+	audios := map[string]bool{}
+	if g.Proposta != nil {
+		for _, c := range g.Proposta.Cartoes {
+			audios[c.AudioURL] = true
+		}
 	}
 
 	semImagem, semAudio := 0, 0
@@ -582,7 +599,12 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		if nome, ok := strings.CutPrefix(c.AudioURL, "/api/audios/"); ok && nomeDeAudio.MatchString(nome) {
 			notas[i].Audio = nome
 		} else if c.AudioURL != "" {
-			if notas[i].Audio, err = a.baixarAudio(ctx, c.AudioURL); err != nil {
+			if !audios[c.AudioURL] {
+				err = errors.New("não é um áudio da página")
+			} else {
+				notas[i].Audio, err = a.baixarAudio(ctx, c.AudioURL)
+			}
+			if err != nil {
 				log.Printf("geração %d: áudio %s: %v", id, c.AudioURL, err)
 				semAudio++
 			}
@@ -595,7 +617,6 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	baralhoID := g.BaralhoID
 	if baralhoID == "" {
 		baralhoID = novoID()
 		if _, err := tx.ExecContext(ctx, `INSERT INTO baralhos (id, nome, criado_em, atualizado_em) VALUES (?, ?, ?, ?)`, baralhoID, nome, a.agora(), a.agora()); err != nil {
@@ -630,8 +651,8 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE geracoes SET estado = ?, resultado = ?, terminado_em = ? WHERE id = ? AND estado = ?`,
-		concluida, baralhoID, a.agora(), id, emRevisao)
+	res, err := tx.ExecContext(ctx, `UPDATE geracoes SET estado = ?, resultado = ?, baralho_id = ?, terminado_em = ? WHERE id = ? AND estado = ?`,
+		concluida, baralhoID, baralhoID, a.agora(), id, emRevisao)
 	if err != nil {
 		falha(w, err)
 		return

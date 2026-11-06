@@ -8,6 +8,7 @@ import { contextoDoCartao, termoDaBusca } from './busca.js'
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
 // O pedido à IA pode ser editado e refeito depois de terminar, mesmo aprovado: aí a IA trabalha no
 // baralho criado, e os cartões que voltarem com a mesma frente atualizam os que já existem.
+// O baralho de destino pode ser trocado na revisão; um link sem baralho começa no "Inglês".
 const props = defineProps({ id: { type: String, required: true } })
 const recado = inject('recado')
 
@@ -16,7 +17,8 @@ const erro = ref('')
 const nome = ref('')
 const cartoes = ref([]) // cópia editável da proposta, com "incluir"
 const buscandoEm = ref(-1) // índice do cartão com a busca de imagem aberta
-const nomeDoDestino = ref('')
+const baralhos = ref([])
+const destino = ref('') // id do baralho, ou '' para um novo
 const enviando = ref(false)
 const editando = ref(false)
 const novoPedido = ref('')
@@ -37,7 +39,8 @@ const doLink = computed(() => g.value?.origem === 'link')
 const doAcervo = computed(() => g.value?.origem === 'acervo')
 const trabalhando = computed(() => ['na_fila', 'rodando'].includes(g.value?.estado))
 const escolhidos = computed(() => cartoes.value.filter((c) => c.incluir))
-const atualizacoes = computed(() => escolhidos.value.filter((c) => c.atualiza).length)
+// "Atualiza" foi visto no baralho do pedido; em outro, quem decide é a aprovação.
+const atualizacoes = computed(() => (destino.value && destino.value === g.value?.baralho_id ? escolhidos.value.filter((c) => c.atualiza).length : 0))
 const podeRefazer = computed(() => g.value && !doLink.value && !doAcervo.value && !trabalhando.value)
 
 async function carregar() {
@@ -48,13 +51,24 @@ async function carregar() {
     if (g.value.estado === 'em_revisao' && anterior !== 'em_revisao') {
       nome.value = g.value.proposta.nome_baralho
       cartoes.value = g.value.proposta.cartoes.map((c) => ({ ...c, incluir: true }))
+      await carregarBaralhos()
     }
-    if (g.value.baralho_id && !nomeDoDestino.value) nomeDoDestino.value = (await api(`/api/baralhos/${g.value.baralho_id}`)).nome
   } catch (e) {
     erro.value = e.status === 0 ? 'Sem conexão: os pedidos à IA só abrem na rede de casa.' : e.message
   }
   clearTimeout(relogio)
   if (trabalhando.value) relogio = setTimeout(carregar, 3000)
+}
+
+const semAcento = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+
+async function carregarBaralhos() {
+  try {
+    baralhos.value = await api('/api/baralhos')
+  } catch {
+    baralhos.value = [] // sem a lista, fica o baralho do pedido
+  }
+  destino.value = g.value.baralho_id || (doLink.value ? (baralhos.value.find((b) => semAcento(b.nome) === 'ingles')?.id ?? '') : '')
 }
 
 async function acao(qual) {
@@ -73,7 +87,7 @@ async function aprovar() {
   try {
     const r = await api(`/api/geracoes/${props.id}/aprovar`, {
       metodo: 'POST',
-      corpo: { nome_baralho: nome.value, cartoes: escolhidos.value },
+      corpo: { baralho_id: destino.value, nome_baralho: nome.value, cartoes: escolhidos.value },
       tempo: 120000,
     })
     const faltas = [
@@ -205,13 +219,23 @@ onBeforeUnmount(() => clearTimeout(relogio))
       <template v-else-if="g.estado === 'em_revisao'">
         <div v-if="g.proposta.observacoes" class="aviso observacoes"><strong v-if="!doLink">Da IA: </strong>{{ g.proposta.observacoes }}</div>
 
-        <label v-if="!g.baralho_id" class="nome-baralho">
-          <span class="rotulo-campo">Nome do baralho novo</span>
-          <input v-model="nome" class="campo" aria-label="Nome do baralho novo" />
-        </label>
-        <p v-else class="suave">
-          Os cartões vão para <strong>{{ nomeDoDestino }}</strong>.<template v-if="atualizacoes">
-            {{ atualizacoes === 1 ? '1 já existe e vai ser atualizado' : `${atualizacoes} já existem e vão ser atualizados` }}, sem perder o histórico.</template
+        <div class="destino">
+          <label class="nome-baralho">
+            <span class="rotulo-campo">Baralho</span>
+            <select v-model="destino" class="campo" aria-label="Baralho">
+              <option value="">Um baralho novo</option>
+              <option v-if="g.baralho_id && !baralhos.some((b) => b.id === g.baralho_id)" :value="g.baralho_id">O baralho do pedido</option>
+              <option v-for="b in baralhos" :key="b.id" :value="b.id">{{ b.nome }}</option>
+            </select>
+          </label>
+          <label v-if="!destino" class="nome-baralho">
+            <span class="rotulo-campo">Nome do baralho novo</span>
+            <input v-model="nome" class="campo" aria-label="Nome do baralho novo" />
+          </label>
+        </div>
+        <p v-if="destino" class="suave">
+          Os cartões de mesma frente atualizam os que já estão no baralho, sem perder o histórico.<template v-if="atualizacoes">
+            {{ atualizacoes === 1 ? '1 já existe e vai ser atualizado.' : `${atualizacoes} já existem e vão ser atualizados.` }}</template
           >
         </p>
 
@@ -244,11 +268,11 @@ onBeforeUnmount(() => clearTimeout(relogio))
         </ul>
 
         <div class="rodape vidro">
-          <button class="botao principal" :disabled="enviando || !escolhidos.length || (!g.baralho_id && !nome.trim())" @click="aprovar">
+          <button class="botao principal" :disabled="enviando || !escolhidos.length || (!destino && !nome.trim())" @click="aprovar">
             {{
               enviando
                 ? 'Criando…'
-                : g.baralho_id
+                : destino
                   ? atualizacoes === escolhidos.length
                     ? `Atualizar ${escolhidos.length} no baralho`
                     : `Adicionar ${escolhidos.length} ao baralho`
@@ -348,6 +372,16 @@ a.chip {
 .nome-baralho {
   display: grid;
   gap: 6px;
+}
+
+.destino {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+select.campo {
+  appearance: auto;
 }
 
 .rotulo-campo {

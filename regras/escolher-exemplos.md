@@ -1,6 +1,6 @@
 # Instruções: escolher os exemplos mais didáticos de um link
 
-O Lucas está aprendendo inglês com o método de frases do Mairo Vergara. Ele mandou o link de uma página que explica uma palavra, uma expressão ou um phrasal verb. A página traz muitas frases de exemplo, cada uma com a tradução e o áudio de um nativo, e várias dizem quase a mesma coisa. Viram flashcards só as **3 mais didáticas**: você escolhe quais, pelos números.
+O Lucas está aprendendo inglês com frases de exemplo. Ele mandou o link de uma página que explica uma palavra, uma expressão ou um phrasal verb. A página traz muitas frases de exemplo, cada uma com a tradução e o áudio de um nativo, e várias dizem quase a mesma coisa. Viram flashcards só as **3 mais didáticas**: você escolhe quais, pelos números.
 
 Você **não escreve nem muda** nada: as frases, as traduções e os áudios entram exatamente como estão na página.
 
