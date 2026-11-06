@@ -1,5 +1,6 @@
 <script setup>
 import { inject, nextTick, onMounted, ref } from 'vue'
+import AbasAdicionar from './AbasAdicionar.vue'
 import { api } from './api.js'
 
 // Pedir um baralho à IA. O pedido entra na fila; a proposta volta para revisão em Geracao.vue.
@@ -43,8 +44,8 @@ onMounted(async () => {
 
 <template>
   <div class="pagina">
-    <a class="voltar" href="#/baralhos">Baralhos</a>
-    <h1>Gerar com IA</h1>
+    <h1>Adicionar</h1>
+    <AbasAdicionar atual="gerar" />
     <p class="suave explicacao">
       Diga o que quer estudar. A IA pesquisa, monta os cartões e devolve uma proposta: você edita, tira o que não quiser e aprova antes de
       qualquer cartão entrar no baralho. Leva alguns minutos.
@@ -100,20 +101,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.voltar {
-  display: inline-block;
-  margin-bottom: 10px;
-  color: var(--texto-suave);
-  font-size: 0.85rem;
-  text-decoration: none;
-}
-
-.voltar::before {
-  content: '‹ ';
-}
-
 .explicacao {
-  margin: -8px 0 20px;
+  margin: 0 0 20px;
   font-size: 0.9rem;
   line-height: 1.55;
 }

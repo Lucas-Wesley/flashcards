@@ -3,7 +3,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
 import { api } from './api.js'
 
-// Um pedido à IA: enquanto ela trabalha, o andamento; quando volta, a proposta para revisar.
+// Um pedido à IA ou um link: enquanto a IA trabalha, o andamento; depois, a proposta para revisar.
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
 const props = defineProps({ id: { type: String, required: true } })
 const recado = inject('recado')
@@ -27,6 +27,7 @@ const NOMES = {
   rejeitada: 'Descartada',
 }
 
+const doLink = computed(() => g.value?.origem === 'link')
 const trabalhando = computed(() => ['na_fila', 'rodando'].includes(g.value?.estado))
 const escolhidos = computed(() => cartoes.value.filter((c) => c.incluir))
 
@@ -65,10 +66,11 @@ async function aprovar() {
       corpo: { nome_baralho: nome.value, cartoes: escolhidos.value },
       tempo: 120000,
     })
-    recado(
-      `${r.criadas === 1 ? '1 nota criada' : `${r.criadas} notas criadas`}` +
-        (r.sem_imagem ? `; ${r.sem_imagem === 1 ? '1 imagem não veio' : `${r.sem_imagem} imagens não vieram`}.` : '.'),
-    )
+    const faltas = [
+      r.sem_imagem && (r.sem_imagem === 1 ? '1 imagem não veio' : `${r.sem_imagem} imagens não vieram`),
+      r.sem_audio && (r.sem_audio === 1 ? '1 áudio não veio' : `${r.sem_audio} áudios não vieram`),
+    ].filter(Boolean)
+    recado(`${r.criadas === 1 ? '1 nota criada' : `${r.criadas} notas criadas`}${faltas.length ? `; ${faltas.join(', ')}` : ''}.`)
     location.hash = `#/baralho/${r.baralho_id}`
   } catch (e) {
     recado(e.message, true)
@@ -90,17 +92,18 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
 <template>
   <div class="pagina">
-    <a class="voltar" href="#/baralhos">Baralhos</a>
+    <a class="voltar" :href="doLink ? '#/link' : '#/baralhos'">{{ doLink ? 'Adicionar do link' : 'Baralhos' }}</a>
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="g">
-      <h1>Gerar com IA</h1>
-      <p class="pedido">“{{ g.pedido }}”</p>
+      <h1>{{ doLink ? 'Cartões do link' : 'Gerar com IA' }}</h1>
+      <p v-if="doLink" class="pedido link"><a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a></p>
+      <p v-else class="pedido">“{{ g.pedido }}”</p>
       <p class="meta">
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
         }}</span>
-        cerca de {{ g.quantidade }} · {{ g.tipo === 'invertido' ? 'nos dois sentidos' : 'frente e verso' }} · pedido em {{ hora(g.criado_em) }}
+        <template v-if="!doLink">cerca de {{ g.quantidade }} · </template>{{ g.tipo === 'invertido' ? 'nos dois sentidos' : 'frente e verso' }} · {{ doLink ? 'lido' : 'pedido' }} em {{ hora(g.criado_em) }}
       </p>
 
       <template v-if="trabalhando">
@@ -123,7 +126,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
       </p>
 
       <template v-else-if="g.estado === 'em_revisao'">
-        <div v-if="g.proposta.observacoes" class="aviso observacoes"><strong>Da IA:</strong> {{ g.proposta.observacoes }}</div>
+        <div v-if="g.proposta.observacoes" class="aviso observacoes"><strong v-if="!doLink">Da IA: </strong>{{ g.proposta.observacoes }}</div>
 
         <label v-if="!g.baralho_id" class="nome-baralho">
           <span class="rotulo-campo">Nome do baralho novo</span>
@@ -139,6 +142,10 @@ onBeforeUnmount(() => clearTimeout(relogio))
               <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
               <textarea v-model="c.verso" class="campo texto-cartao" rows="2" :aria-label="`Verso do cartão ${i + 1}`" />
               <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />
+              <div v-if="c.audio_url" class="audio">
+                <audio controls preload="none" :src="c.audio_url" :aria-label="`Áudio do cartão ${i + 1}`" />
+                <button type="button" class="botao" @click="c.audio_url = ''">Sem áudio</button>
+              </div>
               <div class="imagem">
                 <img v-if="c.imagem_url" :src="c.imagem_url" alt="" loading="lazy" />
                 <div class="linha-acoes">
@@ -253,11 +260,32 @@ onBeforeUnmount(() => clearTimeout(relogio))
   font-size: 1rem;
   line-height: 1.45;
   resize: vertical;
+  /* O campo cresce com o texto: a tradução inteira aparece sem rolar. */
+  field-sizing: content;
+  min-height: 3.6em;
 }
 
 .tags {
   min-height: 32px;
   font-size: 0.82rem;
+}
+
+.pedido.link {
+  overflow-wrap: anywhere;
+  font-family: var(--interface);
+  font-size: 0.9rem;
+}
+
+.audio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.audio audio {
+  height: 36px;
+  max-width: 100%;
 }
 
 .imagem {

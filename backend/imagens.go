@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// Imagens dos cartões. Ficam em DATA_DIR/media, com o nome tirado do conteúdo (o mesmo arquivo
+// Imagens (e áudios) dos cartões. Ficam em DATA_DIR/media, com o nome tirado do conteúdo (o mesmo arquivo
 // nunca é guardado duas vezes); o banco guarda só o nome. Vêm de dois lugares:
 //   - da Wikipédia, pela API dela: a busca devolve a foto principal de cada artigo. É assim que a
 //     IA "acha" imagens: ela indica o artigo, e o servidor busca a foto, sem a IA navegar;
@@ -30,7 +30,10 @@ const tamanhoMaximoDeImagem = 8 << 20
 // O Wikimedia pede um User-Agent que identifique quem chama.
 const agenteWiki = "Flashcards-homelab/1.0 (app pessoal; https://github.com/Lucas-Wesley/flashcards)"
 
-var nomeDeImagem = regexp.MustCompile(`^[0-9a-f]{32}\.(jpg|png|webp|gif)$`)
+var (
+	nomeDeImagem = regexp.MustCompile(`^[0-9a-f]{32}\.(jpg|png|webp|gif)$`)
+	nomeDeAudio  = regexp.MustCompile(`^[0-9a-f]{32}\.mp3$`)
+)
 
 // SVG fica de fora: pode carregar script. As miniaturas da Wikipédia de um SVG já vêm em PNG.
 var extensoes = map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
@@ -108,39 +111,78 @@ func (a *app) buscarNaWikipedia(ctx context.Context, idioma, termo string, limit
 
 // baixarImagem traz uma imagem de um servidor permitido (a Wikipédia) e devolve o nome guardado.
 func (a *app) baixarImagem(ctx context.Context, endereco string) (string, error) {
+	r, err := baixar(ctx, endereco, a.cfg.hostsDeImagem, "só dá para baixar imagens da Wikipédia")
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	return a.guardarImagem(r)
+}
+
+// baixarAudio traz a pronúncia de uma frase, só dos sites que o app sabe ler (o do Mairo Vergara).
+func (a *app) baixarAudio(ctx context.Context, endereco string) (string, error) {
+	r, err := baixar(ctx, endereco, a.cfg.sitesMairo, "só dá para baixar áudios dos sites conhecidos")
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	dados, err := lerAte(r, "áudio")
+	if err != nil {
+		return "", err
+	}
+	// MP3 com etiqueta ID3, ou começando direto num quadro de áudio (11 bits ligados).
+	if http.DetectContentType(dados) != "audio/mpeg" && !(len(dados) > 1 && dados[0] == 0xFF && dados[1]&0xE0 == 0xE0) {
+		return "", errors.New("o áudio não é um MP3")
+	}
+	return a.guardarMidia(dados, "mp3")
+}
+
+func baixar(ctx context.Context, endereco string, hosts []string, recusa string) (io.ReadCloser, error) {
 	u, err := url.Parse(endereco)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || !slices.Contains(a.cfg.hostsDeImagem, u.Host) {
-		return "", errors.New("só dá para baixar imagens da Wikipédia")
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || !slices.Contains(hosts, u.Host) {
+		return nil, errors.New(recusa)
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", agenteWiki)
 	res, err := clienteWeb.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("a imagem não veio: %w", err)
+		return nil, fmt.Errorf("o arquivo não veio: %w", err)
 	}
-	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("a imagem não veio: %d", res.StatusCode)
+		res.Body.Close()
+		return nil, fmt.Errorf("o arquivo não veio: %d", res.StatusCode)
 	}
-	return a.guardarImagem(res.Body)
+	return res.Body, nil
+}
+
+func lerAte(r io.Reader, oQue string) ([]byte, error) {
+	dados, err := io.ReadAll(io.LimitReader(r, tamanhoMaximoDeImagem+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(dados) > tamanhoMaximoDeImagem {
+		return nil, fmt.Errorf("%s maior que 8 MB", oQue)
+	}
+	return dados, nil
 }
 
 // guardarImagem confere o tipo pelo conteúdo (não pelo nome nem pelo cabeçalho) e grava.
 func (a *app) guardarImagem(r io.Reader) (string, error) {
-	dados, err := io.ReadAll(io.LimitReader(r, tamanhoMaximoDeImagem+1))
+	dados, err := lerAte(r, "imagem")
 	if err != nil {
 		return "", err
-	}
-	if len(dados) > tamanhoMaximoDeImagem {
-		return "", errors.New("imagem maior que 8 MB")
 	}
 	ext, ok := extensoes[http.DetectContentType(dados)]
 	if !ok {
 		return "", errors.New("formato de imagem não aceito: use JPG, PNG, WebP ou GIF")
 	}
+	return a.guardarMidia(dados, ext)
+}
+
+func (a *app) guardarMidia(dados []byte, ext string) (string, error) {
 	soma := sha256.Sum256(dados)
 	nome := hex.EncodeToString(soma[:16]) + "." + ext
 	destino := filepath.Join(a.cfg.dados, "media", nome)
@@ -201,9 +243,17 @@ func (a *app) handleEnviarImagem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleImagem(w http.ResponseWriter, r *http.Request) {
+	a.servirMidia(w, r, nomeDeImagem)
+}
+
+func (a *app) handleAudio(w http.ResponseWriter, r *http.Request) {
+	a.servirMidia(w, r, nomeDeAudio)
+}
+
+func (a *app) servirMidia(w http.ResponseWriter, r *http.Request, nomes *regexp.Regexp) {
 	nome := r.PathValue("nome")
-	if !nomeDeImagem.MatchString(nome) {
-		erroJSON(w, http.StatusNotFound, "Imagem não encontrada.")
+	if !nomes.MatchString(nome) {
+		erroJSON(w, http.StatusNotFound, "Arquivo não encontrado.")
 		return
 	}
 	// O nome é o conteúdo: a mesma URL nunca muda de imagem.

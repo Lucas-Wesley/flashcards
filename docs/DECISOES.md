@@ -20,11 +20,13 @@
 - **Gerar baralho com IA**: um pedido ("presidentes do Brasil no século 21") vira uma proposta de cartões, que o Lucas
   edita, filtra e aprova. As instruções da IA ficam em Ajustes, editáveis.
 - **Imagens** nos cartões: buscadas na Wikipédia (pela IA, ao gerar, ou à mão, no editor) ou enviadas do aparelho.
+- **Cartões de um link** do site do Mairo Vergara (colado em Adicionar → Do link ou mandado pelo Compartilhar do
+  Android): cada frase de exemplo vira um cartão, com a tradução e o **áudio** da pronúncia.
 - Ajustes com **Sugestões de melhoria** (API comum do ecossistema).
 
 **Próximos passos** (ordem sugerida):
 
-1. Áudio de pronúncia nos cartões (as imagens já existem; o áudio segue o mesmo caminho, em `/data/media`).
+1. Mais sites em Adicionar → Do link, cada um com o seu leitor (o Lucas avisa antes de mandar links de um site novo).
 2. Endpoint de integração para receber cartões da Biblioteca e do Acervo (quando os dois lados existirem; ver §4).
 3. Estudo fora de casa (offline): baixar a fila do dia e subir as respostas depois.
 4. Cloze (lacuna), estatísticas e otimização dos pesos do FSRS com o histórico do Lucas.
@@ -54,6 +56,9 @@
 | F18 | **Imagens pela API da Wikipédia**, não pela IA navegando: a IA indica o título do artigo (ex.: "Luiz Inácio Lula da Silva") e o servidor busca a foto principal dele. No editor, a mesma busca é manual; também dá para enviar do aparelho | É mais rápido, não gasta a assinatura, acerta a foto do artigo certo e as fotos têm licença livre (Wikimedia Commons). |
 | F19 | Imagens **baixadas para o servidor** (`/data/media`, nome = hash do conteúdo, só JPG, PNG, WebP e GIF conferidos pelo conteúdo; SVG recusado). Da internet, só de `upload.wikimedia.org` e `thumb.wikimedia.org`. Na proposta, a foto fica só como link e é baixada ao aprovar | O cartão não depende da Wikipédia para abrir. A lista fechada de servidores impede o app de virar um baixador de qualquer coisa. O teste real mostrou que a Wikipédia passou a servir miniaturas por `thumb.wikimedia.org`. |
 | F20 | A imagem é **da nota** e aparece **junto da resposta** | Simples e serve aos dois usos principais (rosto de quem é a resposta; ilustração do vocabulário). Imagem na frente fica para quando fizer falta. |
+| F21 | **Cartões de um link** com um **leitor por site**, sem IA. O do Mairo Vergara pega cada parágrafo com a frase em inglês em negrito, uma quebra de linha e a tradução, e o `<audio>` logo depois; o resto da página (resposta rápida, títulos, propaganda) fica de fora. Vira uma proposta, como a da IA (`geracoes.origem = 'link'`) | Pedido do Lucas em 06/11/2026. A página já traz as frases prontas: ler direto é instantâneo (1 s), exato e não gasta a assinatura; a IA só poderia alterar as frases. Testado na página real de "Shoot Up": 18 frases, todas com áudio. Site novo = leitor novo (`leitorDoLink`), só depois de o Lucas avisar. |
+| F22 | **Áudio** na nota (MP3 em `/data/media`, conferido pelo conteúdo), só dos sites conhecidos. É a pronúncia da **frente**: toca sozinho quando ela aparece (na pergunta, ou na resposta do cartão invertido), com botão e tecla R para repetir | É o método de frases do próprio Mairo Vergara: ouvir a frase do nativo enquanto lê. |
+| F23 | Link pelo **Compartilhar** do Android (`share_target` do PWA, como no Acervo) ou colado em **Adicionar → Do link**. O destino padrão é o último baralho usado com links; mandar o mesmo link de novo para o mesmo baralho não duplica | Adicionar ganhou abas (Escrever · Do link · Com IA) em vez de mais um item no menu, que no celular já tem quatro abas. |
 
 ## 3. Como roda
 

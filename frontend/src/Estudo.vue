@@ -5,7 +5,9 @@ import { APRENDENDO, NOVO, REAPRENDENDO, REVISAO, api } from './api.js'
 import { hora, intervalo } from './tempo.js'
 
 // A sessão de estudo: frente, "Mostrar resposta", verso e as notas. Teclado: espaço ou Enter
-// mostra a resposta (e depois vale "Bom"), 1 a 4 respondem, 5 é "Amanhã", Z desfaz, Esc volta.
+// mostra a resposta (e depois vale "Bom"), 1 a 4 respondem, 5 é "Amanhã", R repete o áudio, Z desfaz,
+// Esc volta. O áudio é a pronúncia da frente da nota: toca sozinho quando ela aparece (na pergunta,
+// ou na resposta do cartão invertido).
 // "Amanhã" conta como erro para o algoritmo, mas o cartão sai do dia em vez de voltar em minutos.
 // Os botões são grandes de propósito: a mesma tela serve no celular e no navegador da TV.
 const props = defineProps({ id: { type: String, required: true } })
@@ -28,6 +30,17 @@ const NOTAS = [
 ]
 
 const cartao = computed(() => estudo.value?.cartao)
+const player = typeof Audio === 'undefined' ? null : new Audio()
+// Onde o áudio aparece: com a pergunta (sentido normal) ou com a resposta (invertido).
+const audioNaPergunta = computed(() => !!cartao.value?.audio && cartao.value.sentido === 0)
+const audioVisivel = computed(() => !!cartao.value?.audio && (audioNaPergunta.value || mostrando.value))
+
+function tocar() {
+  if (!player || !cartao.value?.audio) return
+  player.src = `/api/audios/${cartao.value.audio}`
+  // Sem um toque antes, o navegador pode bloquear o som automático: aí fica o botão.
+  player.play().catch(() => {})
+}
 const fila = computed(() => {
   const e = cartao.value?.estado
   if (e === NOVO) return 'novos'
@@ -40,6 +53,8 @@ async function aplicar(dados) {
   estudo.value = dados
   mostrando.value = false
   mostradoEm = Date.now()
+  player?.pause()
+  if (audioNaPergunta.value) tocar()
   clearTimeout(espera)
   // Um cartão aprendendo volta ainda hoje: a tela se atualiza sozinha quando ele vencer.
   if (!dados.cartao && dados.espera_ate) {
@@ -61,6 +76,7 @@ async function carregar() {
 
 function mostrar() {
   mostrando.value = true
+  if (cartao.value?.audio && !audioNaPergunta.value) tocar()
 }
 
 async function responder(nota) {
@@ -106,6 +122,7 @@ function aoTeclar(ev) {
     return desfazer()
   }
   if (ev.ctrlKey || !cartao.value) return
+  if (ev.key.toLowerCase() === 'r' && audioVisivel.value) return tocar()
   if (ev.key === ' ' || ev.key === 'Enter') {
     ev.preventDefault()
     return mostrando.value ? responder(3) : mostrar()
@@ -121,6 +138,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', aoTeclar)
   clearTimeout(espera)
+  player?.pause()
 })
 </script>
 
@@ -145,9 +163,13 @@ onBeforeUnmount(() => {
 
     <section v-if="cartao" class="face" :aria-busy="enviando">
       <div class="frente texto-cartao">{{ cartao.frente }}</div>
+      <button v-if="audioNaPergunta" class="botao icone som" aria-label="Ouvir de novo" title="Ouvir de novo (R)" @click="tocar"><Icone nome="som" /></button>
       <template v-if="mostrando">
         <hr />
         <div class="verso texto-cartao">{{ cartao.verso }}</div>
+        <button v-if="cartao.audio && !audioNaPergunta" class="botao icone som" aria-label="Ouvir de novo" title="Ouvir de novo (R)" @click="tocar">
+          <Icone nome="som" />
+        </button>
         <img v-if="cartao.imagem" class="foto" :src="`/api/imagens/${cartao.imagem}`" alt="" />
       </template>
     </section>
@@ -267,6 +289,10 @@ onBeforeUnmount(() => {
 .verso {
   font-size: clamp(1.25rem, 3.2vw, 1.6rem);
   color: var(--texto);
+}
+
+.som {
+  margin: 14px auto 0;
 }
 
 .foto {

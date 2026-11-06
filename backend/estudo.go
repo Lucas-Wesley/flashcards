@@ -110,12 +110,15 @@ func (a *app) proximo(ctx context.Context, f fila) (*cartao, error) {
 }
 
 type cartaoDeEstudo struct {
-	ID      string `json:"id"`
-	NotaID  string `json:"nota_id"`
-	Frente  string `json:"frente"`
-	Verso   string `json:"verso"`
-	Tags    string `json:"tags"`
-	Imagem  string `json:"imagem"`
+	ID     string `json:"id"`
+	NotaID string `json:"nota_id"`
+	Frente string `json:"frente"`
+	Verso  string `json:"verso"`
+	Tags   string `json:"tags"`
+	Imagem string `json:"imagem"`
+	// Audio é da frente da nota (a frase em inglês): toca com a pergunta no sentido normal e com a
+	// resposta no invertido.
+	Audio   string `json:"audio"`
 	Sentido int    `json:"sentido"`
 	Estado  int    `json:"estado"`
 	// Repeticoes vai e volta na resposta: um toque duplo não responde o mesmo cartão duas vezes.
@@ -156,14 +159,14 @@ func (a *app) montarEstudo(ctx context.Context, b baralho, forcar *cartao) (estu
 		e.EsperaAte = espera.String
 		return e, nil
 	}
-	var frente, verso, tags, imagem string
-	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem); err != nil {
+	var frente, verso, tags, imagem, audio string
+	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem, audio FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem, &audio); err != nil {
 		return e, err
 	}
 	if c.Sentido == 1 {
 		frente, verso = verso, frente
 	}
-	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
+	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
 	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, f.agora)
 	return e, err
 }

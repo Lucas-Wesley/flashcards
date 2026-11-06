@@ -104,21 +104,23 @@ func abrirBanco(caminho string) (*sql.DB, error) {
 
 // migrar acrescenta as colunas que vieram depois da primeira versão a um banco que já existe.
 func migrar(db *sql.DB) error {
-	colunas := map[string]bool{}
-	rows, err := db.Query(`SELECT name FROM pragma_table_info('notas')`)
-	if err != nil {
-		return err
+	novas := []struct{ tabela, coluna, definicao string }{
+		{"notas", "imagem", `TEXT NOT NULL DEFAULT ''`},
+		{"notas", "audio", `TEXT NOT NULL DEFAULT ''`},
+		{"geracoes", "origem", `TEXT NOT NULL DEFAULT 'ia'`},
 	}
-	for rows.Next() {
-		var nome string
-		rows.Scan(&nome)
-		colunas[nome] = true
+	for _, n := range novas {
+		var existe int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, n.tabela, n.coluna).Scan(&existe); err != nil {
+			return err
+		}
+		if existe == 0 {
+			if _, err := db.Exec(`ALTER TABLE ` + n.tabela + ` ADD COLUMN ` + n.coluna + ` ` + n.definicao); err != nil {
+				return err
+			}
+		}
 	}
-	rows.Close()
-	if !colunas["imagem"] {
-		_, err = db.Exec(`ALTER TABLE notas ADD COLUMN imagem TEXT NOT NULL DEFAULT ''`)
-	}
-	return err
+	return nil
 }
 
 // Horários em RFC 3339, UTC e sem fração de segundo: assim a ordem do texto é a ordem do tempo.
@@ -140,6 +142,7 @@ CREATE TABLE IF NOT EXISTS notas (
 	verso         TEXT NOT NULL,
 	tags          TEXT NOT NULL DEFAULT '',
 	imagem        TEXT NOT NULL DEFAULT '', -- arquivo em DATA_DIR/media; aparece junto do verso
+	audio         TEXT NOT NULL DEFAULT '', -- arquivo em DATA_DIR/media; toca junto da frente da nota
 	criada_em     TEXT NOT NULL,
 	atualizada_em TEXT NOT NULL
 );
@@ -177,7 +180,8 @@ CREATE INDEX IF NOT EXISTS revisoes_dia ON revisoes (baralho_id, revisado_em);
 -- Pedidos de baralho à IA: entram na fila, viram uma proposta e esperam a revisão do Lucas.
 CREATE TABLE IF NOT EXISTS geracoes (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
-	pedido       TEXT NOT NULL,
+	origem       TEXT NOT NULL DEFAULT 'ia', -- 'ia' (pedido à IA) ou 'link' (frases de uma página)
+	pedido       TEXT NOT NULL, -- o pedido à IA, ou o link
 	quantidade   INTEGER NOT NULL,
 	tipo         TEXT NOT NULL,
 	baralho_id   TEXT NOT NULL DEFAULT '', -- vazio = baralho novo

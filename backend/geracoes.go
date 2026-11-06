@@ -36,6 +36,7 @@ const tempoMaximoDaGeracao = 15 * time.Minute
 
 type geracao struct {
 	ID          int64     `json:"id"`
+	Origem      string    `json:"origem"`
 	Pedido      string    `json:"pedido"`
 	Quantidade  int       `json:"quantidade"`
 	Tipo        string    `json:"tipo"`
@@ -63,6 +64,8 @@ type cartaoProposto struct {
 	// ImagemURL: a foto encontrada; só é baixada para o servidor quando o Lucas aprova.
 	Imagem    string `json:"imagem"`
 	ImagemURL string `json:"imagem_url"`
+	// AudioURL: a pronúncia da frente, quando a página de um link traz (baixada ao aprovar).
+	AudioURL string `json:"audio_url"`
 }
 
 const esquemaProposta = `{
@@ -87,12 +90,12 @@ const esquemaProposta = `{
   "required": ["nome_baralho", "cartoes"]
 }`
 
-const colunasGeracao = `id, pedido, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
+const colunasGeracao = `id, origem, pedido, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
 
 func lerGeracao(l linha) (*geracao, error) {
 	var g geracao
 	var p string
-	if err := l.Scan(&g.ID, &g.Pedido, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
+	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
 		&g.CriadoEm, &g.IniciadoEm, &g.TerminadoEm); err != nil {
 		return nil, err
 	}
@@ -394,7 +397,7 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 		a.fila.mu.Unlock()
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, terminado_em = ? WHERE id = ? AND estado = ?`, cancelada, a.agora(), id, naFila)
 	case "refazer":
-		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '' WHERE id = ? AND estado IN (?, ?, ?)`,
+		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '' WHERE id = ? AND origem = 'ia' AND estado IN (?, ?, ?)`,
 			naFila, id, falhou, cancelada, rejeitada)
 		a.fila.avisar()
 	case "descartar":
@@ -457,14 +460,19 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	semImagem := 0
+	semImagem, semAudio := 0, 0
 	for i, c := range corpo.Cartoes {
-		if c.ImagemURL == "" {
-			continue
+		if c.ImagemURL != "" {
+			if notas[i].Imagem, err = a.baixarImagem(ctx, c.ImagemURL); err != nil {
+				log.Printf("geração %d: imagem %s: %v", id, c.ImagemURL, err)
+				semImagem++
+			}
 		}
-		if notas[i].Imagem, err = a.baixarImagem(ctx, c.ImagemURL); err != nil {
-			log.Printf("geração %d: imagem %s: %v", id, c.ImagemURL, err)
-			semImagem++
+		if c.AudioURL != "" {
+			if notas[i].Audio, err = a.baixarAudio(ctx, c.AudioURL); err != nil {
+				log.Printf("geração %d: áudio %s: %v", id, c.AudioURL, err)
+				semAudio++
+			}
 		}
 	}
 
@@ -503,7 +511,7 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		falha(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"baralho_id": baralhoID, "criadas": len(notas), "sem_imagem": semImagem})
+	writeJSON(w, http.StatusOK, map[string]any{"baralho_id": baralhoID, "criadas": len(notas), "sem_imagem": semImagem, "sem_audio": semAudio})
 }
 
 func cortar(s string, n int) string {

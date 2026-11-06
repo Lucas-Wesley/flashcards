@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,8 +46,17 @@ func novoAmbiente(t *testing.T) *ambiente {
 
 	// Wikipédia falsa: a busca acha o artigo do Lula com foto; a foto é um PNG de verdade.
 	e.wiki = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/foto.png" {
+		// O mesmo servidor faz o papel do site do Mairo Vergara.
+		switch {
+		case r.URL.Path == "/foto.png":
 			w.Write(pngDeTeste)
+			return
+		case r.URL.Path == "/run-into/":
+			pagina, _ := os.ReadFile("testdata/mairo.html")
+			w.Write(bytes.ReplaceAll(pagina, []byte("https://SITE"), []byte(e.wiki.URL)))
+			return
+		case strings.HasPrefix(r.URL.Path, "/audio/"):
+			w.Write(append([]byte("ID3\x04\x00\x00\x00\x00\x00\x00"), r.URL.Path...))
 			return
 		}
 		if strings.Contains(r.URL.Query().Get("gsrsearch"), "Lula") {
@@ -61,7 +71,7 @@ func novoAmbiente(t *testing.T) *ambiente {
 	dados := t.TempDir()
 	e.dados = dados
 	cfg := config{dados: dados, regras: absoluto("../regras"), claude: absoluto("testdata/claude-falso"),
-		wiki: e.wiki.URL + "/w/api.php", hostsDeImagem: []string{wikiURL.Host}}
+		wiki: e.wiki.URL + "/w/api.php", hostsDeImagem: []string{wikiURL.Host}, sitesMairo: []string{wikiURL.Host}}
 	a, err := novoApp(db, novoRelogio(fuso, func() time.Time { return e.agora }), cfg)
 	if err != nil {
 		t.Fatal(err)

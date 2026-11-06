@@ -79,6 +79,29 @@ test('busca, edita e suspende um cartão', async ({ page }) => {
   await expect(page.getByText(/Revisão em/)).toBeVisible()
 })
 
+test('monta cartões a partir de um link compartilhado', async ({ page }) => {
+  // O "Compartilhar" do Android abre o app com o link na URL.
+  const link = 'http://localhost:8096/mairo.html'
+  await page.goto(`/?text=${encodeURIComponent('Olha isso ' + link)}`)
+  await expect(page.getByRole('heading', { name: 'Adicionar' })).toBeVisible()
+  await expect(page.getByLabel('Link')).toHaveValue(link)
+  await page.getByLabel('Baralho de destino').selectOption({ label: 'Inglês' })
+  await page.getByRole('button', { name: 'Montar cartões' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Cartões do link' })).toBeVisible()
+  await expect(page.getByText('3 frases de exemplo de “Run Into”, 2 com áudio.')).toBeVisible()
+  await expect(page.getByLabel('Frente do cartão 1')).toHaveValue('I ran into an old friend yesterday.')
+  await expect(page.getByLabel('Áudio do cartão 1')).toBeAttached()
+  await page.getByRole('button', { name: 'Adicionar 3 ao baralho' }).click()
+  // O áudio do terceiro aponta para fora do site conhecido: o cartão entra sem ele.
+  await expect(page.getByText('3 notas criadas; 1 áudio não veio.')).toBeVisible()
+
+  await page.goto('/#/cartoes')
+  await page.getByLabel('Buscar cartões').fill('ran into an old')
+  await page.getByRole('link', { name: /ran into an old friend/ }).click()
+  await expect(page.locator('audio')).toHaveAttribute('src', /\/api\/audios\/[0-9a-f]{32}\.mp3$/)
+})
+
 test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('link', { name: 'peça à IA um baralho pronto' }).click()

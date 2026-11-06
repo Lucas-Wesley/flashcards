@@ -19,6 +19,9 @@ type config struct {
 	// baixar imagem. Os testes trocam os dois por um servidor falso.
 	wiki          string
 	hostsDeImagem []string
+	// Sites de onde o app sabe tirar cartões de um link (o leitor do Mairo Vergara). O áudio das
+	// frases também vem deles.
+	sitesMairo []string
 }
 
 func configDoAmbiente(dados string) config {
@@ -29,6 +32,7 @@ func configDoAmbiente(dados string) config {
 		modelo:        os.Getenv("CLAUDE_MODEL"),
 		wiki:          env("WIKI_API", "https://%s.wikipedia.org/w/api.php"),
 		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org"), ","),
+		sitesMairo:    strings.Split(env("SITES_MAIRO", "www.mairovergara.com,mairovergara.com"), ","),
 	}
 }
 

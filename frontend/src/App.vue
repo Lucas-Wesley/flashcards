@@ -11,6 +11,7 @@ import Gerar from './Gerar.vue'
 import Icone from './Icone.vue'
 import Importar from './Importar.vue'
 import Instrucao from './Instrucao.vue'
+import Link from './Link.vue'
 import { api } from './api.js'
 
 // Rotas no hash, como na Biblioteca e no Acervo: o "voltar" do celular volta para a tela anterior.
@@ -34,7 +35,8 @@ const MENU = [
 
 const secao = computed(() => {
   const n = rota.value.nome
-  if (['baralho', 'importar', 'gerar', 'geracao'].includes(n)) return 'baralhos'
+  if (['baralho', 'importar'].includes(n)) return 'baralhos'
+  if (['link', 'gerar', 'geracao'].includes(n)) return 'adicionar'
   if (n === 'nota') return 'cartoes'
   return n
 })
@@ -72,7 +74,20 @@ function mostrarRecado(texto, erro = false) {
 }
 provide('recado', mostrarRecado)
 
+// "Compartilhar" do Android com o app instalado abre "/?text=…&url=…": o link vai para Adicionar →
+// Do link, já preenchido, para escolher o baralho.
+function receberCompartilhado() {
+  const p = new URLSearchParams(location.search)
+  const enviado = [p.get('url'), p.get('text'), p.get('title')].filter(Boolean).join(' ')
+  if (!enviado) return
+  const link = enviado.match(/https?:\/\/\S+/)?.[0] || ''
+  history.replaceState(null, '', `${location.pathname}#/link/${encodeURIComponent(link)}`)
+  hash.value = location.hash
+  if (!link) mostrarRecado('O que veio pelo Compartilhar não tem um link.', true)
+}
+
 onMounted(async () => {
+  receberCompartilhado()
   window.addEventListener('hashchange', aoMudarHash)
   document.addEventListener('visibilitychange', atualizarPendentes)
   relogio = setInterval(atualizarPendentes, 60000)
@@ -120,6 +135,7 @@ onBeforeUnmount(() => {
       <Editor v-else-if="rota.nome === 'nota'" :key="rota.param" :id="rota.param" />
       <Cartoes v-else-if="rota.nome === 'cartoes'" :key="rota.param" :baralho="rota.param" />
       <Gerar v-else-if="rota.nome === 'gerar'" :key="'gerar' + rota.param" :baralho="rota.param" />
+      <Link v-else-if="rota.nome === 'link'" :key="'link' + rota.param" :link="rota.param" />
       <Geracao v-else-if="rota.nome === 'geracao'" :key="rota.param" :id="rota.param" />
       <Instrucao v-else-if="rota.nome === 'ajustes' && rota.param.startsWith('instrucoes/')" :key="rota.param" :arquivo="rota.param.slice('instrucoes/'.length)" />
       <Ajustes v-else-if="rota.nome === 'ajustes'" :tela="telaAnterior" />

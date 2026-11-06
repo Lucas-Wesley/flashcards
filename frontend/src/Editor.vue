@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject, nextTick, onMounted, ref } from 'vue'
+import AbasAdicionar from './AbasAdicionar.vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, api, lembrar } from './api.js'
 import { vencimento } from './tempo.js'
@@ -14,7 +15,7 @@ const recado = inject('recado')
 
 const baralhos = ref([])
 const nota = ref(null)
-const dados = ref({ baralho_id: '', tipo: 'basico', frente: '', verso: '', tags: '', imagem: '' })
+const dados = ref({ baralho_id: '', tipo: 'basico', frente: '', verso: '', tags: '', imagem: '', audio: '' })
 const erro = ref('')
 const salvando = ref(false)
 const campoFrente = ref(null)
@@ -41,8 +42,8 @@ async function carregar() {
     baralhos.value = await api('/api/baralhos')
     if (editando.value) {
       nota.value = await api(`/api/notas/${props.id}`)
-      const { baralho_id, tipo, frente, verso, tags, imagem } = nota.value
-      dados.value = { baralho_id, tipo, frente, verso, tags, imagem }
+      const { baralho_id, tipo, frente, verso, tags, imagem, audio } = nota.value
+      dados.value = { baralho_id, tipo, frente, verso, tags, imagem, audio }
     } else {
       const ultimo = props.baralho || lembrar('baralho')
       dados.value.baralho_id = baralhos.value.some((b) => b.id === ultimo) ? ultimo : baralhos.value[0]?.id || ''
@@ -143,6 +144,7 @@ onMounted(carregar)
 <template>
   <div class="pagina">
     <h1>{{ editando ? 'Editar cartão' : 'Adicionar' }}</h1>
+    <AbasAdicionar v-if="!editando" atual="adicionar" />
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <p v-else-if="!editando && !baralhos.length" class="vazio">
@@ -192,6 +194,13 @@ onMounted(carregar)
         <span class="rotulo-campo">Verso</span>
         <textarea v-model="dados.verso" class="campo texto-cartao" rows="3" aria-label="Verso" />
       </label>
+      <div v-if="dados.audio" class="imagem">
+        <span class="rotulo-campo">Áudio <span class="suave">· a pronúncia da frente</span></span>
+        <div class="com-imagem">
+          <audio controls :src="`/api/audios/${dados.audio}`" preload="none" />
+          <button type="button" class="botao" @click="dados.audio = ''">Remover áudio</button>
+        </div>
+      </div>
       <div class="imagem">
         <span class="rotulo-campo">Imagem <span class="suave">· aparece com o verso</span></span>
         <div v-if="dados.imagem" class="com-imagem">

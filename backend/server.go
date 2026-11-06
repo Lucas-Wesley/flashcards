@@ -37,10 +37,13 @@ func newServer(a *app, web fs.FS, version string) http.Handler {
 	mux.HandleFunc("POST /api/geracoes/{id}/aprovar", a.handleAprovar)
 	mux.HandleFunc("POST /api/geracoes/{id}/{acao}", a.handleAcaoGeracao)
 
+	mux.HandleFunc("POST /api/links", a.handleLink)
+
 	mux.HandleFunc("GET /api/imagens", a.handleBuscarImagens)
 	mux.HandleFunc("POST /api/imagens/baixar", a.handleBaixarImagem)
 	mux.HandleFunc("POST /api/imagens", a.handleEnviarImagem)
 	mux.HandleFunc("GET /api/imagens/{nome}", a.handleImagem)
+	mux.HandleFunc("GET /api/audios/{nome}", a.handleAudio)
 
 	mux.HandleFunc("GET /api/instrucoes", a.handleInstrucoes)
 	mux.HandleFunc("GET /api/instrucoes/{arquivo}", a.handleInstrucao)

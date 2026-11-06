@@ -235,7 +235,7 @@ func TestMigraBancoAntigo(t *testing.T) {
 	}
 	defer db.Close()
 	var imagem string
-	if err := db.QueryRow(`SELECT imagem FROM notas WHERE id = 'n1'`).Scan(&imagem); err != nil || imagem != "" {
+	if err := db.QueryRow(`SELECT imagem || audio FROM notas WHERE id = 'n1'`).Scan(&imagem); err != nil || imagem != "" {
 		t.Fatalf("migração: %v %q", err, imagem)
 	}
 }

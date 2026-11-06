@@ -21,6 +21,12 @@ export default defineConfig({
         background_color: '#fbfaf8',
         display: 'standalone',
         start_url: '/',
+        // Android: o Flashcards aparece em "Compartilhar"; o link chega em "/?text=…" (App.vue).
+        share_target: {
+          action: '/',
+          method: 'GET',
+          params: { title: 'title', text: 'text', url: 'url' },
+        },
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
