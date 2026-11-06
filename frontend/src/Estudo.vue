@@ -4,8 +4,9 @@ import Icone from './Icone.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, REVISAO, api } from './api.js'
 import { hora, intervalo } from './tempo.js'
 
-// A sessão de estudo: frente, "Mostrar resposta", verso e as quatro notas. Teclado: espaço ou
-// Enter mostra a resposta (e depois vale "Bom"), 1 a 4 respondem, Z desfaz, Esc volta.
+// A sessão de estudo: frente, "Mostrar resposta", verso e as notas. Teclado: espaço ou Enter
+// mostra a resposta (e depois vale "Bom"), 1 a 4 respondem, 5 é "Amanhã", Z desfaz, Esc volta.
+// "Amanhã" conta como erro para o algoritmo, mas o cartão sai do dia em vez de voltar em minutos.
 // Os botões são grandes de propósito: a mesma tela serve no celular e no navegador da TV.
 const props = defineProps({ id: { type: String, required: true } })
 const recado = inject('recado')
@@ -19,10 +20,11 @@ let mostradoEm = Date.now()
 let espera
 
 const NOTAS = [
-  { valor: 1, nome: 'Errei', classe: 'errei' },
-  { valor: 2, nome: 'Difícil', classe: '' },
-  { valor: 3, nome: 'Bom', classe: 'principal' },
-  { valor: 4, nome: 'Fácil', classe: '' },
+  { valor: 1, nome: 'Errei', classe: 'errei', dica: 'Errei: rever daqui a pouco (1)' },
+  { valor: 5, nome: 'Amanhã', classe: 'errei', dica: 'Errei: rever só amanhã (5)' },
+  { valor: 2, nome: 'Difícil', classe: '', dica: 'Difícil (2)' },
+  { valor: 3, nome: 'Bom', classe: 'principal', dica: 'Bom (3, espaço ou Enter)' },
+  { valor: 4, nome: 'Fácil', classe: '', dica: 'Fácil (4)' },
 ]
 
 const cartao = computed(() => estudo.value?.cartao)
@@ -108,7 +110,7 @@ function aoTeclar(ev) {
     ev.preventDefault()
     return mostrando.value ? responder(3) : mostrar()
   }
-  if (mostrando.value && ['1', '2', '3', '4'].includes(ev.key)) responder(Number(ev.key))
+  if (mostrando.value && ['1', '2', '3', '4', '5'].includes(ev.key)) responder(Number(ev.key))
 }
 
 onMounted(() => {
@@ -170,7 +172,7 @@ onBeforeUnmount(() => {
           class="botao nota"
           :class="n.classe"
           :disabled="enviando"
-          :title="`${n.nome} (${n.valor})`"
+          :title="n.dica"
           @click="responder(n.valor)"
         >
           <span class="quando">{{ intervalo(estudo.previsoes[n.valor]) }}</span>
@@ -309,7 +311,7 @@ hr {
 .notas {
   display: flex;
   width: 100%;
-  max-width: 560px;
+  max-width: 640px;
   margin: 0 auto;
 }
 
@@ -321,8 +323,8 @@ hr {
 
 .notas {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
 }
 
 .nota {

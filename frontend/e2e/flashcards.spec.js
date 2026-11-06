@@ -42,6 +42,7 @@ test('estuda pelo teclado e desfaz', async ({ page }) => {
   // Os botões mostram quando o cartão volta.
   await expect(page.getByRole('button', { name: /1 min\s*Errei/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /10 min\s*Bom/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /1 d\s*Amanhã/ })).toBeVisible()
 
   await page.keyboard.press('3') // Bom: volta em 10 min
   // O outro sentido de "casa" fica para amanhã; vem o próximo novo.

@@ -13,7 +13,7 @@
 
 - Baralhos com limites diários (novos e revisões) e retenção desejada.
 - Notas de dois tipos: **frente e verso** (um cartão) e **nos dois sentidos** (dois cartões, para vocabulário).
-- Estudo com "Mostrar resposta", quatro notas (Errei, Difícil, Bom, Fácil) com o intervalo previsto em cada botão,
+- Estudo com "Mostrar resposta", as notas Errei, Amanhã, Difícil, Bom e Fácil com o intervalo previsto em cada botão,
   atalhos de teclado e **desfazer**.
 - Lista de cartões com busca e filtro por baralho; edição, suspensão e exclusão.
 - Importação de texto ou CSV (`frente;verso;tags`, tabulação ou vírgula).
@@ -44,6 +44,7 @@
 | F11 | Conteúdo em **texto puro** (quebras de linha preservadas), sem Markdown nem HTML | Suficiente para idiomas e datas, e sem risco de HTML injetado por importação. Mídia entra no próximo passo. |
 | F12 | Botões de resposta grandes (52 px) e teclado completo (espaço, 1–4, Z, Esc) | Exceção consciente ao "botões pequenos" do design system: a tela de estudo serve também à TV, com controle remoto. |
 | F13 | Autenticação e backup ficam para o fim, como nas outras apps | Mesmo motivo da Biblioteca (R15): só o Lucas usa a rede local. |
+| F14 | **Botão "Amanhã"** (tecla 5), ao lado de "Errei": para o FSRS é um erro (estabilidade de erro e, numa revisão, um lapso), mas sem os passos de minutos; o cartão volta em 24h, no dia de estudo seguinte. No histórico fica com a nota 5 | Pedido do Lucas em 06/11/2026: errar e rever em 10 minutos nem sempre ajuda, às vezes é melhor deixar para amanhã. Registrar como erro mantém o histórico honesto para o algoritmo e para uma futura otimização dos pesos, que deve tratar a nota 5 como 1. |
 
 ## 3. Como roda
 

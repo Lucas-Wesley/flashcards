@@ -202,3 +202,33 @@ func TestOpcoesDoBaralho(t *testing.T) {
 		t.Fatalf("notas do baralho apagado ficaram: %d", len(notas))
 	}
 }
+
+func TestAmanhaTiraDoDiaEVoltaNoSeguinte(t *testing.T) {
+	e := novoAmbiente(t) // 6/11, 10h
+	b := e.criarBaralho("Inglês")
+	e.criarNota(b.ID, "basico", "um", "x")
+	e.criarNota(b.ID, "basico", "dois", "x")
+
+	es := e.estudo(b.ID)
+	if es.Previsoes[5] != 86400 {
+		t.Fatalf("botão amanhã sem previsão: %v", es.Previsoes)
+	}
+	es = e.responder(es, 5)
+	if es.Cartao.Frente != "dois" || es.Contagem.Aprendendo != 0 {
+		t.Fatalf("o cartão adiado não devia ficar no dia: %q %+v", es.Cartao.Frente, es.Contagem)
+	}
+	es = e.responder(es, 5)
+	if es.Cartao != nil || es.EsperaAte != "" {
+		t.Fatalf("não devia sobrar nada hoje: %+v", es.Cartao)
+	}
+
+	// Amanhã cedo os dois já estão na fila de revisão, e "desfazer" também vale para o adiado.
+	e.agora = time.Date(2026, 11, 7, 6, 0, 0, 0, e.fuso)
+	es = e.estudo(b.ID)
+	if es.Contagem.Revisar != 2 || es.Cartao.Frente != "um" || es.Cartao.Estado != revisao {
+		t.Fatalf("no dia seguinte: %+v %+v", es.Contagem, es.Cartao)
+	}
+	if s := e.pedir("POST", "/api/cartoes/"+es.Cartao.ID+"/responder", map[string]any{"nota": 6, "repeticoes": es.Cartao.Repeticoes}, nil); s != http.StatusBadRequest {
+		t.Errorf("nota 6 aceita: %d", s)
+	}
+}

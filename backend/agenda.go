@@ -78,14 +78,31 @@ func (c *cartao) aplicar(f fsrs.Card, d time.Duration) {
 	c.PassosRestantes = f.RemainingSteps
 }
 
-// responderCartao aplica a nota (1 errei, 2 difícil, 3 bom, 4 fácil) e devolve o cartão agendado.
+// amanha é a quinta nota, fora do FSRS: "errei, mas revejo amanhã". Para a memória do cartão é
+// um erro como "Errei" (a estabilidade cai e, numa revisão, conta um lapso); só não passa pelos
+// passos de minutos e volta no dia de estudo seguinte.
+const amanha fsrs.Rating = 5
+
+// responderCartao aplica a nota (1 errei, 2 difícil, 3 bom, 4 fácil, 5 amanhã) e devolve o cartão agendado.
 func (r relogio) responderCartao(c cartao, retencao float64, nota fsrs.Rating, agora time.Time) (cartao, error) {
 	d := r.deslocamento(agora)
-	info, err := agendador(retencao).Next(c.paraFSRS(d), mover(agora, d), nota)
+	f := agendador(retencao)
+	if nota == amanha {
+		// Sem passos, o FSRS gradua o cartão direto para revisão, com a estabilidade de um erro.
+		f.LearningSteps, f.RelearningSteps = nil, nil
+		nota = fsrs.Again
+	}
+	info, err := f.Next(c.paraFSRS(d), mover(agora, d), nota)
 	if err != nil {
 		return c, err
 	}
 	c.aplicar(info.Card, d)
+	if f.LearningSteps == nil {
+		// O FSRS pode sugerir mais de um dia (cartão antigo e estável); o pedido é amanhã. Daqui a
+		// 24h cai sempre no dia de estudo seguinte, que vale inteiro para a fila de revisões.
+		c.VenceEm = agora.Add(24 * time.Hour)
+		c.DiasAgendados = 1
+	}
 	return c, nil
 }
 
@@ -96,9 +113,10 @@ func (r relogio) previsoes(c cartao, retencao float64, agora time.Time) (map[int
 	if err != nil {
 		return nil, err
 	}
-	saida := make(map[int]int64, 4)
+	saida := make(map[int]int64, 5)
 	for _, n := range []fsrs.Rating{fsrs.Again, fsrs.Hard, fsrs.Good, fsrs.Easy} {
 		saida[int(n)] = int64(mover(log[n].Card.Due, -d).Sub(agora).Round(time.Second) / time.Second)
 	}
+	saida[int(amanha)] = 86400
 	return saida, nil
 }

@@ -190,8 +190,8 @@ func (a *app) handleResponder(w http.ResponseWriter, r *http.Request) {
 	if !lerCorpo(w, r, &corpo) {
 		return
 	}
-	if corpo.Nota < 1 || corpo.Nota > 4 {
-		erroJSON(w, http.StatusBadRequest, "Nota inválida: use de 1 a 4.")
+	if corpo.Nota < 1 || corpo.Nota > int(amanha) {
+		erroJSON(w, http.StatusBadRequest, "Nota inválida: use de 1 a 5.")
 		return
 	}
 	ctx := r.Context()

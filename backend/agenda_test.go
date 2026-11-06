@@ -141,3 +141,34 @@ func TestRetencaoMaiorEncurtaOIntervalo(t *testing.T) {
 		t.Errorf("retenção 95%%: %d dias; 80%%: %d dias", b.DiasAgendados, a.DiasAgendados)
 	}
 }
+
+// "Amanhã" é um erro para a memória do cartão, mas sem os passos de minutos: volta em 24h.
+func TestAmanhaEhErroSemPassos(t *testing.T) {
+	r, fuso := relogioDeTeste(t)
+	agora := time.Date(2026, 11, 6, 22, 0, 0, 0, fuso).UTC()
+
+	novoCartao, err := r.responderCartao(cartao{VenceEm: agora}, 0.9, amanha, agora)
+	if err != nil {
+		t.Fatal(err)
+	}
+	errei, _ := r.responderCartao(cartao{VenceEm: agora}, 0.9, fsrs.Again, agora)
+	if novoCartao.Estado != revisao || novoCartao.DiasAgendados != 1 || !novoCartao.VenceEm.Equal(agora.Add(24*time.Hour)) ||
+		novoCartao.Estabilidade != errei.Estabilidade || novoCartao.Dificuldade != errei.Dificuldade {
+		t.Fatalf("novo com amanhã: %+v (errei daria estabilidade %v)", novoCartao, errei.Estabilidade)
+	}
+
+	// Um cartão antigo e estável: o FSRS sugeriria dias depois do erro, mas volta amanhã, com lapso.
+	estavel := cartao{Estado: revisao, Estabilidade: 200, Dificuldade: 4, DiasAgendados: 180, Repeticoes: 9,
+		UltimaRevisao: agora.AddDate(0, 0, -180), VenceEm: agora}
+	c, _ := r.responderCartao(estavel, 0.9, amanha, agora)
+	errei, _ = r.responderCartao(estavel, 0.9, fsrs.Again, agora)
+	if c.Estado != revisao || c.Lapsos != 1 || c.DiasAgendados != 1 || !c.VenceEm.Equal(agora.Add(24*time.Hour)) ||
+		math.Abs(c.Estabilidade-errei.Estabilidade) > 1e-9 {
+		t.Fatalf("revisão com amanhã: %+v (errei daria estabilidade %v)", c, errei.Estabilidade)
+	}
+
+	prev, _ := r.previsoes(estavel, 0.9, agora)
+	if prev[int(amanha)] != 86400 {
+		t.Errorf("previsão de amanhã: %d", prev[int(amanha)])
+	}
+}
