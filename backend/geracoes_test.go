@@ -390,17 +390,25 @@ func TestLimpezaApagaSoAMidiaSemUso(t *testing.T) {
 func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 	e := novoAmbiente(t)
 	texto := "TEXTO DO ACERVO. " + strings.Repeat("A Revolução Francesa começou em 1789. ", 300)
-	pedir := func() geracao {
+	secoes := []map[string]string{
+		{"titulo": "Governo Lula", "link": "https://acervo/#/ler/historia/indice.md?capitulo=Governo%20Lula"},
+		{"titulo": "Governo Dilma", "link": "https://acervo/#/ler/historia/dilma.md"},
+	}
+	pedir := func(baralho map[string]any) geracao {
 		var g geracao
-		if s := e.pedir("POST", "/api/textos", map[string]any{
-			"titulo": "História › Revolução Francesa", "baralho": "História", "contexto": "Tema História, capítulo Revolução Francesa.",
-			"texto": texto, "link": "https://acervo/#/ler/historia/indice.md",
-		}, &g); s != http.StatusCreated {
+		corpo := map[string]any{
+			"titulo": "História › Revolução Francesa", "contexto": "Tema História, capítulo Revolução Francesa.",
+			"texto": texto, "link": "https://acervo/#/ler/historia/indice.md", "secoes": secoes,
+		}
+		for k, v := range baralho {
+			corpo[k] = v
+		}
+		if s := e.pedir("POST", "/api/textos", corpo, &g); s != http.StatusCreated {
 			t.Fatalf("pedir do texto: %d", s)
 		}
 		return g
 	}
-	g := pedir()
+	g := pedir(map[string]any{"baralho": "História"})
 	if g.Origem != origemAcervo || g.Quantidade != 22 || g.Link == "" || g.BaralhoID != "" {
 		t.Fatalf("pedido: %+v", g)
 	}
@@ -411,17 +419,32 @@ func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 		!strings.Contains(obs, "Ferramentas: ;") || !strings.Contains(obs, "WebSearch,WebFetch.") {
 		t.Fatalf("observações: %q", obs)
 	}
-	// O baralho novo tem o nome do Tema, seja qual for o que a IA sugeriu.
+	// O baralho novo tem o nome que o Lucas deu, seja qual for o que a IA sugeriu.
 	if g.Proposta.NomeBaralho != "História" {
 		t.Fatalf("nome: %q", g.Proposta.NomeBaralho)
 	}
+	// Cada cartão leva o link do capítulo de onde saiu; sem capítulo, o do texto inteiro.
+	c := g.Proposta.Cartoes
+	if !strings.Contains(obs, "Recebeu os capítulos.") || c[0].Secao != "Governo Lula" || c[0].Fonte != secoes[0]["link"] || c[1].Fonte != "https://acervo/#/ler/historia/indice.md" {
+		t.Fatalf("fontes: %+v", c)
+	}
 	var r map[string]any
-	if s := e.pedir("POST", "/api/geracoes/"+strconv.FormatInt(g.ID, 10)+"/aprovar", map[string]any{"nome_baralho": "História", "cartoes": g.Proposta.Cartoes[:1]}, &r); s != http.StatusOK {
+	if s := e.pedir("POST", "/api/geracoes/"+strconv.FormatInt(g.ID, 10)+"/aprovar", map[string]any{"nome_baralho": "História", "cartoes": c[:1]}, &r); s != http.StatusOK {
 		t.Fatalf("aprovar: %d", s)
 	}
+	var notas []nota
+	e.pedir("GET", "/api/notas?baralho="+r["baralho_id"].(string), nil, &notas)
+	if len(notas) != 1 || notas[0].Fonte != secoes[0]["link"] {
+		t.Fatalf("nota: %+v", notas)
+	}
 
-	// O próximo capítulo do mesmo Tema vai para o baralho que já existe e sabe dos cartões dele.
-	g2 := pedir()
+	// Um baralho novo com o mesmo nome é outro baralho: só vai para o que existe quem o escolhe.
+	if outro := pedir(map[string]any{"baralho": "História"}); outro.BaralhoID != "" {
+		t.Fatalf("nome igual virou o mesmo baralho: %+v", outro)
+	} else {
+		e.esperarGeracao(outro.ID, emRevisao)
+	}
+	g2 := pedir(map[string]any{"baralho_id": r["baralho_id"]})
 	if g2.BaralhoID != r["baralho_id"] {
 		t.Fatalf("baralho do segundo: %q, esperava %v", g2.BaralhoID, r["baralho_id"])
 	}
@@ -438,6 +461,15 @@ func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 		t.Fatalf("refeito: %q", g2.Proposta.Observacoes)
 	}
 
+	for _, baralho := range []map[string]any{{}, {"baralho_id": "nao-existe"}} {
+		corpo := map[string]any{"titulo": "x", "texto": texto}
+		for k, v := range baralho {
+			corpo[k] = v
+		}
+		if s := e.pedir("POST", "/api/textos", corpo, nil); s != http.StatusBadRequest {
+			t.Errorf("sem baralho válido %v: %d", baralho, s)
+		}
+	}
 	if s := e.pedir("POST", "/api/textos", map[string]any{"titulo": "x", "texto": "curto"}, nil); s != http.StatusBadRequest {
 		t.Errorf("texto curto: %d", s)
 	}

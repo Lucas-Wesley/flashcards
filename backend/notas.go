@@ -21,6 +21,7 @@ type nota struct {
 	Tags         string         `json:"tags"`
 	Imagem       string         `json:"imagem"`
 	Audio        string         `json:"audio"`
+	Fonte        string         `json:"fonte"`
 	CriadaEm     string         `json:"criada_em"`
 	AtualizadaEm string         `json:"atualizada_em"`
 	Cartoes      []cartaoResumo `json:"cartoes"`
@@ -59,12 +60,15 @@ type dadosDaNota struct {
 	Tags      string `json:"tags"`
 	Imagem    string `json:"imagem"`
 	Audio     string `json:"audio"`
+	// Fonte: o link para o trecho do texto de onde o cartão saiu (um capítulo no Acervo).
+	Fonte string `json:"fonte"`
 }
 
 func (d *dadosDaNota) validar() string {
 	d.Frente = strings.TrimSpace(d.Frente)
 	d.Verso = strings.TrimSpace(d.Verso)
 	d.Tags = limparTags(d.Tags)
+	d.Fonte = strings.TrimSpace(d.Fonte)
 	if d.Tipo == "" {
 		d.Tipo = "basico"
 	}
@@ -79,8 +83,14 @@ func (d *dadosDaNota) validar() string {
 		return "Imagem inválida."
 	case d.Audio != "" && !nomeDeAudio.MatchString(d.Audio):
 		return "Áudio inválido."
+	case d.Fonte != "" && !linkDeFonte(d.Fonte):
+		return "O link da fonte precisa começar com http:// ou https://."
 	}
 	return ""
+}
+
+func linkDeFonte(s string) bool {
+	return len(s) <= 2000 && (strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://"))
 }
 
 // criarCartoes cria os cartões que faltam para o tipo da nota. Cartão novo vai para o fim da fila.
@@ -98,8 +108,8 @@ func criarCartoes(ctx context.Context, tx *sql.Tx, notaID, baralhoID, tipo, agor
 
 func (a *app) criarNota(ctx context.Context, tx *sql.Tx, d dadosDaNota) (string, error) {
 	id := novoID()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO notas (id, baralho_id, tipo, frente, verso, tags, imagem, audio, criada_em, atualizada_em)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, d.Imagem, d.Audio, a.agora(), a.agora()); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO notas (id, baralho_id, tipo, frente, verso, tags, imagem, audio, fonte, criada_em, atualizada_em)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, d.Imagem, d.Audio, d.Fonte, a.agora(), a.agora()); err != nil {
 		return "", err
 	}
 	return id, criarCartoes(ctx, tx, id, d.BaralhoID, d.Tipo, a.agora())
@@ -163,8 +173,8 @@ func (a *app) handleMudarNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `UPDATE notas SET baralho_id = ?, tipo = ?, frente = ?, verso = ?, tags = ?, imagem = ?, audio = ?, atualizada_em = ? WHERE id = ?`,
-		d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, d.Imagem, d.Audio, a.agora(), id)
+	res, err := tx.ExecContext(ctx, `UPDATE notas SET baralho_id = ?, tipo = ?, frente = ?, verso = ?, tags = ?, imagem = ?, audio = ?, fonte = ?, atualizada_em = ? WHERE id = ?`,
+		d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, d.Imagem, d.Audio, d.Fonte, a.agora(), id)
 	if err != nil {
 		falha(w, err)
 		return
@@ -242,7 +252,7 @@ func (a *app) handleNotas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) notas(ctx context.Context, filtro string, args ...any) ([]nota, error) {
-	rows, err := a.db.QueryContext(ctx, `SELECT id, baralho_id, tipo, frente, verso, tags, imagem, audio, criada_em, atualizada_em FROM notas `+filtro, args...)
+	rows, err := a.db.QueryContext(ctx, `SELECT id, baralho_id, tipo, frente, verso, tags, imagem, audio, fonte, criada_em, atualizada_em FROM notas `+filtro, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +260,7 @@ func (a *app) notas(ctx context.Context, filtro string, args ...any) ([]nota, er
 	indice := map[string]int{}
 	for rows.Next() {
 		var n nota
-		if err := rows.Scan(&n.ID, &n.BaralhoID, &n.Tipo, &n.Frente, &n.Verso, &n.Tags, &n.Imagem, &n.Audio, &n.CriadaEm, &n.AtualizadaEm); err != nil {
+		if err := rows.Scan(&n.ID, &n.BaralhoID, &n.Tipo, &n.Frente, &n.Verso, &n.Tags, &n.Imagem, &n.Audio, &n.Fonte, &n.CriadaEm, &n.AtualizadaEm); err != nil {
 			rows.Close()
 			return nil, err
 		}

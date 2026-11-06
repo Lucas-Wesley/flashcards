@@ -113,6 +113,8 @@ func migrar(db *sql.DB) error {
 		{"geracoes", "contexto", `TEXT NOT NULL DEFAULT ''`},
 		{"geracoes", "link", `TEXT NOT NULL DEFAULT ''`},
 		{"geracoes", "nome_sugerido", `TEXT NOT NULL DEFAULT ''`},
+		{"geracoes", "secoes", `TEXT NOT NULL DEFAULT ''`},
+		{"notas", "fonte", `TEXT NOT NULL DEFAULT ''`},
 	}
 	for _, n := range novas {
 		var existe int
@@ -148,6 +150,7 @@ CREATE TABLE IF NOT EXISTS notas (
 	tags          TEXT NOT NULL DEFAULT '',
 	imagem        TEXT NOT NULL DEFAULT '', -- arquivo em DATA_DIR/media; aparece junto do verso
 	audio         TEXT NOT NULL DEFAULT '', -- arquivo em DATA_DIR/media; toca junto da frente da nota
+	fonte         TEXT NOT NULL DEFAULT '', -- link para o trecho de onde o cartão saiu (no Acervo)
 	criada_em     TEXT NOT NULL,
 	atualizada_em TEXT NOT NULL
 );

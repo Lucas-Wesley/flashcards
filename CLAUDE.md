@@ -3,7 +3,7 @@
 App do **ecossistema de apps pessoais do Lucas**: flashcards com repetição espaçada, no estilo do
 Anki, simplificado. É o **3º app** (depois da Biblioteca Digital e do Acervo; ver ROADMAP do Hub).
 
-**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F29) e próximos passos.
+**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F30) e próximos passos.
 
 ## Em uma frase
 Baralhos → notas (frente e verso, ou nos dois sentidos) → cartões agendados pelo **FSRS-6**
@@ -27,7 +27,7 @@ Mesma infraestrutura e mesmo design system (`docs/DESIGN-SYSTEM.md`) da Bibliote
 - **Links de sites novos:** cada site tem um leitor próprio em `links.go` (F21). O Lucas avisa antes;
   baixar a página, ver a estrutura e escrever o leitor com teste (sem copiar o texto do site para o repositório).
 - Integração com Biblioteca/Acervo só quando os dois lados existirem; **não definir o contrato comum antes**. O Acervo já
-  manda textos (`POST /api/textos`, F28): mudar esse endpoint é mudar os dois apps.
+  manda textos (`POST /api/textos`, F28, F30): mudar esse endpoint é mudar os dois apps.
 - A **extensão do Chrome** (repo `home-lab-plugin-web`) usa `POST /api/links` e `GET /api/baralhos`:
   mudar um deles é mudar a extensão também.
 - **Commits:** autoria do Lucas; **sem linha `Co-Authored-By`**.

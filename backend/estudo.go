@@ -140,7 +140,9 @@ type cartaoDeEstudo struct {
 	Imagem string `json:"imagem"`
 	// Audio é da frente da nota (a frase em inglês): toca com a pergunta no sentido normal e com a
 	// resposta no invertido.
-	Audio   string `json:"audio"`
+	Audio string `json:"audio"`
+	// Fonte: o trecho do Acervo de onde o cartão saiu, para abrir depois da resposta.
+	Fonte   string `json:"fonte,omitempty"`
 	Sentido int    `json:"sentido"`
 	Estado  int    `json:"estado"`
 	// Repeticoes vai e volta na resposta: um toque duplo não responde o mesmo cartão duas vezes.
@@ -214,14 +216,14 @@ func (a *app) montarEstudo(ctx context.Context, baralhos []baralho, todos bool, 
 	e.EsperaAte = ""
 	c, b := escolhido, filaEscolhida.b
 	e.Baralho = b
-	var frente, verso, tags, imagem, audio string
-	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem, audio FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem, &audio); err != nil {
+	var frente, verso, tags, imagem, audio, fonte string
+	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem, audio, fonte FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem, &audio, &fonte); err != nil {
 		return e, err
 	}
 	if c.Sentido == 1 {
 		frente, verso = verso, frente
 	}
-	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
+	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Fonte: fonte, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
 	var err error
 	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, filaEscolhida.agora)
 	return e, err

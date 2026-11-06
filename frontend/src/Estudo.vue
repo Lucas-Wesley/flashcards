@@ -176,6 +176,7 @@ onBeforeUnmount(() => {
           <Icone nome="som" />
         </button>
         <img v-if="cartao.imagem" class="foto" :src="`/api/imagens/${cartao.imagem}`" alt="" />
+        <a v-if="cartao.fonte" class="fonte suave" :href="cartao.fonte" target="_blank" rel="noopener">Ver no Acervo</a>
       </template>
     </section>
 
@@ -319,6 +320,13 @@ onBeforeUnmount(() => {
   margin: 24px auto 0;
   border-radius: var(--raio);
   object-fit: contain;
+}
+
+.fonte {
+  display: block;
+  width: fit-content;
+  margin: 20px auto 0;
+  font-size: 0.85rem;
 }
 
 hr {

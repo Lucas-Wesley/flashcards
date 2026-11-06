@@ -16,7 +16,7 @@ const recado = inject('recado')
 
 const baralhos = ref([])
 const nota = ref(null)
-const dados = ref({ baralho_id: '', tipo: 'basico', frente: '', verso: '', tags: '', imagem: '', audio: '' })
+const dados = ref({ baralho_id: '', tipo: 'basico', frente: '', verso: '', tags: '', imagem: '', audio: '', fonte: '' })
 const erro = ref('')
 const salvando = ref(false)
 const campoFrente = ref(null)
@@ -43,8 +43,8 @@ async function carregar() {
     baralhos.value = await api('/api/baralhos')
     if (editando.value) {
       nota.value = await api(`/api/notas/${props.id}`)
-      const { baralho_id, tipo, frente, verso, tags, imagem, audio } = nota.value
-      dados.value = { baralho_id, tipo, frente, verso, tags, imagem, audio }
+      const { baralho_id, tipo, frente, verso, tags, imagem, audio, fonte } = nota.value
+      dados.value = { baralho_id, tipo, frente, verso, tags, imagem, audio, fonte }
     } else {
       const ultimo = props.baralho || lembrar('baralho')
       dados.value.baralho_id = baralhos.value.some((b) => b.id === ultimo) ? ultimo : baralhos.value[0]?.id || ''
@@ -217,6 +217,13 @@ onMounted(carregar)
           <span v-if="trazendoImagem" class="suave">Trazendo a imagem…</span>
         </div>
         <BuscaDeImagem v-if="buscandoImagem && !dados.imagem" :termo="termoDaBusca(dados.verso)" :contexto="contextoDoCartao(dados)" @escolher="escolherImagem" @fechar="buscandoImagem = false" />
+      </div>
+      <div v-if="dados.fonte" class="imagem">
+        <span class="rotulo-campo">Fonte <span class="suave">· o trecho de onde o cartão saiu</span></span>
+        <div class="com-imagem">
+          <a :href="dados.fonte" target="_blank" rel="noopener">Abrir no Acervo</a>
+          <button type="button" class="botao" @click="dados.fonte = ''">Remover link</button>
+        </div>
       </div>
       <label>
         <span class="rotulo-campo">Tags</span>

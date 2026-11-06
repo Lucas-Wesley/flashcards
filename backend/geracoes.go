@@ -42,18 +42,20 @@ type geracao struct {
 	Texto    string `json:"-"`
 	Contexto string `json:"contexto,omitempty"`
 	Link     string `json:"link,omitempty"`
-	// NomeSugerido: o nome que o Acervo dá ao baralho (o do Tema), quando ele ainda não existe.
-	NomeSugerido string    `json:"nome_sugerido,omitempty"`
-	Quantidade   int       `json:"quantidade"`
-	Tipo         string    `json:"tipo"`
-	BaralhoID    string    `json:"baralho_id"`
-	Estado       string    `json:"estado"`
-	Erro         string    `json:"erro"`
-	Proposta     *proposta `json:"proposta,omitempty"`
-	Resultado    string    `json:"resultado"`
-	CriadoEm     string    `json:"criado_em"`
-	IniciadoEm   string    `json:"iniciado_em"`
-	TerminadoEm  string    `json:"terminado_em"`
+	// NomeSugerido: o nome do baralho novo, que o Lucas deu no Acervo.
+	NomeSugerido string `json:"nome_sugerido,omitempty"`
+	// Secoes: os capítulos do texto, cada um com o link dele no Acervo (JSON de []secaoDoTexto).
+	Secoes      string    `json:"-"`
+	Quantidade  int       `json:"quantidade"`
+	Tipo        string    `json:"tipo"`
+	BaralhoID   string    `json:"baralho_id"`
+	Estado      string    `json:"estado"`
+	Erro        string    `json:"erro"`
+	Proposta    *proposta `json:"proposta,omitempty"`
+	Resultado   string    `json:"resultado"`
+	CriadoEm    string    `json:"criado_em"`
+	IniciadoEm  string    `json:"iniciado_em"`
+	TerminadoEm string    `json:"terminado_em"`
 }
 
 type proposta struct {
@@ -77,6 +79,10 @@ type cartaoProposto struct {
 	// Atualiza: o baralho já tem um cartão com esta frente; aprovar muda o verso dele (e o resto)
 	// sem perder o histórico de estudo.
 	Atualiza bool `json:"atualiza"`
+	// Num texto do Acervo: o capítulo de onde o cartão saiu (a IA escolhe entre os do texto) e o
+	// link para ele, que a nota guarda para abrir no estudo.
+	Secao string `json:"secao,omitempty"`
+	Fonte string `json:"fonte,omitempty"`
 }
 
 const esquemaProposta = `{
@@ -92,7 +98,8 @@ const esquemaProposta = `{
           "frente": {"type": "string"},
           "verso": {"type": "string"},
           "tags": {"type": "string"},
-          "imagem": {"type": "string"}
+          "imagem": {"type": "string"},
+          "secao": {"type": "string"}
         },
         "required": ["frente", "verso"]
       }
@@ -101,12 +108,12 @@ const esquemaProposta = `{
   "required": ["nome_baralho", "cartoes"]
 }`
 
-const colunasGeracao = `id, origem, pedido, texto, contexto, link, nome_sugerido, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
+const colunasGeracao = `id, origem, pedido, texto, contexto, link, nome_sugerido, secoes, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
 
 func lerGeracao(l linha) (*geracao, error) {
 	var g geracao
 	var p string
-	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Texto, &g.Contexto, &g.Link, &g.NomeSugerido, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
+	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Texto, &g.Contexto, &g.Link, &g.NomeSugerido, &g.Secoes, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
 		&g.CriadoEm, &g.IniciadoEm, &g.TerminadoEm); err != nil {
 		return nil, err
 	}
@@ -272,6 +279,11 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	cartoes := p.Cartoes[:0]
 	for _, c := range p.Cartoes {
 		c.Frente, c.Verso, c.Tags, c.Imagem = strings.TrimSpace(c.Frente), strings.TrimSpace(c.Verso), limparTags(c.Tags), strings.TrimSpace(c.Imagem)
+		if g.Origem == origemAcervo {
+			c.Secao, c.Fonte = g.fonteDoCartao(c.Secao)
+		} else {
+			c.Secao = ""
+		}
 		if c.Frente != "" && c.Verso != "" {
 			cartoes = append(cartoes, c)
 		}
@@ -540,7 +552,7 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 	}
 	notas := make([]dadosDaNota, 0, len(corpo.Cartoes))
 	for _, c := range corpo.Cartoes {
-		d := dadosDaNota{Tipo: g.Tipo, Frente: c.Frente, Verso: c.Verso, Tags: c.Tags}
+		d := dadosDaNota{Tipo: g.Tipo, Frente: c.Frente, Verso: c.Verso, Tags: c.Tags, Fonte: c.Fonte}
 		if d.validar() != "" || d.Verso == "" {
 			erroJSON(w, http.StatusBadRequest, "Todo cartão precisa de frente e verso: “"+cortar(c.Frente, 40)+"”.")
 			return
@@ -602,8 +614,9 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 			if tiposDeNota[d.Tipo] < tiposDeNota[tipo] {
 				d.Tipo = tipo // atualizar não apaga o cartão do verso
 			}
-			_, err = tx.ExecContext(ctx, `UPDATE notas SET tipo = ?, verso = ?, tags = ?, imagem = ?, audio = ?, atualizada_em = ? WHERE id = ?`,
-				d.Tipo, d.Verso, d.Tags, d.Imagem, d.Audio, a.agora(), existente)
+			_, err = tx.ExecContext(ctx, `UPDATE notas SET tipo = ?, verso = ?, tags = ?, imagem = ?, audio = ?,
+					fonte = CASE WHEN ? = '' THEN fonte ELSE ? END, atualizada_em = ? WHERE id = ?`,
+				d.Tipo, d.Verso, d.Tags, d.Imagem, d.Audio, d.Fonte, d.Fonte, a.agora(), existente)
 			if err == nil {
 				err = criarCartoes(ctx, tx, existente, baralhoID, d.Tipo, a.agora())
 			}

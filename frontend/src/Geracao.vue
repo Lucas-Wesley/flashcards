@@ -221,6 +221,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
             <input v-model="c.incluir" type="checkbox" class="marcar" :aria-label="`Incluir o cartão ${i + 1}`" />
             <div class="campos">
               <span v-if="c.atualiza" class="chip atualiza">Atualiza o cartão que já existe</span>
+              <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || 'Texto no Acervo' }}</a>
               <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
               <textarea v-model="c.verso" class="campo texto-cartao" rows="2" :aria-label="`Verso do cartão ${i + 1}`" />
               <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />
@@ -315,7 +316,8 @@ onBeforeUnmount(() => clearTimeout(relogio))
   line-height: 1.5;
 }
 
-.atualiza {
+.atualiza,
+a.chip {
   justify-self: start;
 }
 
