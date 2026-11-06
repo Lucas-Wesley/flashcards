@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -259,4 +260,101 @@ func (a *app) servirMidia(w http.ResponseWriter, r *http.Request, nomes *regexp.
 	// O nome é o conteúdo: a mesma URL nunca muda de imagem.
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	http.ServeFile(w, r, filepath.Join(a.cfg.dados, "media", nome))
+}
+
+// ---------- Limpeza ----------
+
+// Uma mídia que nenhum cartão usa (a imagem trocada no editor, a de um cartão apagado, a enviada e
+// abandonada) só ocupa espaço. A limpeza roda ao subir o app e uma vez por dia; o arquivo só sai
+// depois de um dia sem uso, para não levar o que o editor acabou de enviar e ainda não salvou.
+const (
+	intervaloDaLimpeza = 24 * time.Hour
+	carenciaDaMidia    = 24 * time.Hour
+)
+
+func (a *app) limparMidiaSempre(ctx context.Context) {
+	for {
+		if n, err := a.limparMidia(ctx, time.Now().Add(-carenciaDaMidia)); err != nil {
+			log.Printf("limpeza da mídia: %v", err)
+		} else if n > 0 {
+			log.Printf("limpeza da mídia: %d arquivos sem uso apagados", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(intervaloDaLimpeza):
+		}
+	}
+}
+
+// limparMidia apaga os arquivos de mídia sem uso modificados antes de antesDe. Conta como em uso o
+// que uma nota guarda e o que uma proposta em revisão aponta (o cartão que ela vai atualizar).
+func (a *app) limparMidia(ctx context.Context, antesDe time.Time) (int, error) {
+	usados := map[string]bool{}
+	rows, err := a.db.QueryContext(ctx, `SELECT imagem, audio FROM notas WHERE imagem != '' OR audio != ''`)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var imagem, audio string
+		if err := rows.Scan(&imagem, &audio); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		usados[imagem], usados[audio] = true, true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	rows, err = a.db.QueryContext(ctx, `SELECT `+colunasGeracao+` FROM geracoes WHERE estado = ?`, emRevisao)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		g, err := lerGeracao(rows)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		for _, c := range g.Proposta.cartoesOuNada() {
+			usados[strings.TrimPrefix(c.ImagemURL, "/api/imagens/")] = true
+			usados[strings.TrimPrefix(c.AudioURL, "/api/audios/")] = true
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	pasta := filepath.Join(a.cfg.dados, "media")
+	arquivos, err := os.ReadDir(pasta)
+	if err != nil {
+		return 0, err
+	}
+	apagados := 0
+	for _, arq := range arquivos {
+		nome := arq.Name()
+		// Só o que o app grava: mídia com nome de conteúdo e as sobras .tmp de uma gravação interrompida.
+		ehMidia := nomeDeImagem.MatchString(nome) || nomeDeAudio.MatchString(nome)
+		if arq.IsDir() || usados[nome] || !(ehMidia || strings.HasSuffix(nome, ".tmp")) {
+			continue
+		}
+		info, err := arq.Info()
+		if err != nil || !info.ModTime().Before(antesDe) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(pasta, nome)); err != nil {
+			return apagados, err
+		}
+		apagados++
+	}
+	return apagados, nil
+}
+
+func (p *proposta) cartoesOuNada() []cartaoProposto {
+	if p == nil {
+		return nil
+	}
+	return p.Cartoes
 }

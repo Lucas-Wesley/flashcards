@@ -52,6 +52,7 @@ func main() {
 		log.Fatal(err)
 	}
 	go a.fila.rodar(ctx)
+	go a.limparMidiaSempre(ctx)
 
 	web, err := fs.Sub(webDist, "web/dist")
 	if err != nil {

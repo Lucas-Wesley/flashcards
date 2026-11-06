@@ -152,7 +152,10 @@ test('estuda todos os baralhos misturados pelo botão do topo', async ({ page })
   await expect(page.getByText('Pronto por hoje.')).toBeVisible()
   await expect(page.getByText(/revisões hoje, somando os baralhos/)).toBeVisible()
   expect([...baralhos].sort()).toEqual(['Inglês', 'Presidentes do Brasil no século 21'])
-  await expect(page.locator('.estudar-tudo')).toHaveCount(0)
+  // Sem nada para hoje, o botão continua lá, só que discreto.
+  await page.goto('/')
+  await expect(page.locator('.estudar-tudo')).toHaveText(/Estudar\s*0/)
+  await expect(page.locator('.estudar-tudo')).not.toHaveClass(/principal/)
 })
 
 test('edita a instrução da IA e volta ao padrão', async ({ page }) => {

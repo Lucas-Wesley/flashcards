@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -301,5 +303,52 @@ func TestRefazerPedidoAprovadoAtualizaOsCartoes(t *testing.T) {
 	e.pedir("GET", "/api/geracoes?baralho="+res.BaralhoID, nil, &doBaralho)
 	if len(doBaralho) != 1 || doBaralho[0].ID != g.ID {
 		t.Fatalf("pedidos do baralho: %+v", doBaralho)
+	}
+}
+
+func TestLimpezaApagaSoAMidiaSemUso(t *testing.T) {
+	e := novoAmbiente(t)
+	g := e.pedirGeracao(map[string]any{"pedido": "presidentes do Brasil no século 21", "quantidade": 10})
+	g = e.esperarGeracao(g.ID, emRevisao)
+	var res struct {
+		BaralhoID string `json:"baralho_id"`
+	}
+	corpo := map[string]any{"nome_baralho": "Presidentes", "cartoes": g.Proposta.Cartoes}
+	if s := e.pedir("POST", "/api/geracoes/"+strconv.FormatInt(g.ID, 10)+"/aprovar", corpo, &res); s != http.StatusOK {
+		t.Fatalf("aprovar: %d", s)
+	}
+	var notas []nota
+	e.pedir("GET", "/api/notas?q=2003", nil, &notas)
+	usada := notas[0].Imagem
+
+	pasta := filepath.Join(e.dados, "media")
+	velho := time.Now().Add(-48 * time.Hour)
+	for _, nome := range []string{"0123456789abcdef0123456789abcdef.jpg", "fedcba9876543210fedcba9876543210.mp3", "x.jpg.tmp", "leia-me.txt"} {
+		os.WriteFile(filepath.Join(pasta, nome), []byte("x"), 0o644)
+		os.Chtimes(filepath.Join(pasta, nome), velho, velho)
+	}
+	os.WriteFile(filepath.Join(pasta, "abcdefabcdefabcdefabcdefabcdefab.png"), pngDeTeste, 0o644) // recém-enviada no editor
+	os.Chtimes(filepath.Join(pasta, usada), velho, velho)
+
+	n, err := e.app.limparMidia(context.Background(), time.Now().Add(-carenciaDaMidia))
+	if err != nil || n != 3 {
+		t.Fatalf("limpeza: %d %v", n, err)
+	}
+	var sobraram []string
+	arquivos, _ := os.ReadDir(pasta)
+	for _, a := range arquivos {
+		sobraram = append(sobraram, a.Name())
+	}
+	slices.Sort(sobraram)
+	esperado := []string{"abcdefabcdefabcdefabcdefabcdefab.png", "leia-me.txt", usada}
+	slices.Sort(esperado)
+	if !slices.Equal(sobraram, esperado) {
+		t.Fatalf("sobraram %v, esperava %v", sobraram, esperado)
+	}
+
+	// Trocada a imagem do cartão, a antiga fica sem uso e sai na próxima limpeza.
+	e.app.db.Exec(`UPDATE notas SET imagem = '' WHERE id = ?`, notas[0].ID)
+	if n, _ := e.app.limparMidia(context.Background(), time.Now().Add(-carenciaDaMidia)); n != 1 {
+		t.Fatalf("a imagem que saiu do cartão devia ser apagada: %d", n)
 	}
 }

@@ -68,7 +68,13 @@ onBeforeUnmount(() => clearTimeout(relogio))
   <div class="pagina">
     <div class="topo">
       <h1>Baralhos</h1>
-      <a v-if="totalGeral" class="botao principal estudar-tudo" href="#/estudar" title="Todos os baralhos, misturados"
+      <!-- Sempre à vista; sem nada para hoje, fica discreto e abre o "Pronto por hoje". -->
+      <a
+        v-if="baralhos?.length"
+        class="botao estudar-tudo"
+        :class="{ principal: totalGeral }"
+        href="#/estudar"
+        :title="totalGeral ? 'Todos os baralhos, misturados' : 'Nada para estudar agora'"
         >Estudar <span class="total">{{ totalGeral }}</span></a
       >
     </div>
@@ -134,6 +140,10 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
 .topo h1 {
   margin-bottom: 0;
+}
+
+.estudar-tudo {
+  flex-shrink: 0;
 }
 
 .estudar-tudo .total {
@@ -238,7 +248,9 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
 .pedido {
   display: flex;
+  flex: 1;
   align-items: center;
+  min-width: 0;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 0;
@@ -247,9 +259,15 @@ onBeforeUnmount(() => clearTimeout(relogio))
 }
 
 .texto-pedido {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pedido .chip {
+  flex-shrink: 0;
 }
 
 .pedido:hover .texto-pedido {

@@ -41,7 +41,8 @@ func (a *app) chamarClaude(ctx context.Context, p pedidoClaude) (respostaClaude,
 	}
 	prompt := p.instrucao + "\n\nSiga as instruções abaixo.\n\n" + regra
 
-	args := []string{"-p", prompt, "--output-format", "json",
+	// Sem guardar a sessão: cada geração deixaria um histórico em $HOME/.claude que ninguém lê.
+	args := []string{"-p", prompt, "--output-format", "json", "--no-session-persistence",
 		"--allowedTools", ferramentasInternet, "--disallowedTools", ferramentasProibidas}
 	if p.esquema != "" {
 		args = append(args, "--json-schema", p.esquema)
