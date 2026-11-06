@@ -177,7 +177,15 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
       <template v-if="trabalhando">
         <p class="suave espera">
-          {{ g.estado === 'na_fila' ? 'Esperando a vez: a IA faz um pedido por vez.' : doAcervo ? 'Ela lê o texto e escolhe o que vale virar cartão; costuma levar alguns minutos.' : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.' }}
+          {{
+            g.estado === 'na_fila'
+              ? 'Esperando a vez: a IA faz um pedido por vez.'
+              : doLink
+                ? 'Ela lê as frases da página e escolhe as 3 mais didáticas; costuma levar menos de um minuto.'
+                : doAcervo
+                  ? 'Ela lê o texto e escolhe o que vale virar cartão; costuma levar alguns minutos.'
+                  : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.'
+          }}
           Pode sair desta tela: o pedido continua e aparece em Baralhos quando a proposta estiver pronta.
         </p>
         <button class="botao perigo" @click="acao('cancelar')">Cancelar pedido</button>

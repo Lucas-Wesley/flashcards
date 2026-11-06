@@ -254,6 +254,9 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	if g.Origem == origemAcervo {
 		pedido = pedidoDoTexto(g, destino, pasta)
 	}
+	if g.Origem == "link" {
+		return a.escolherExemplos(ctx, g, pasta)
+	}
 	r, err := a.chamarClaude(ctx, pedido)
 	if err != nil {
 		return nil, err
@@ -476,13 +479,21 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 			erroJSON(w, http.StatusBadRequest, "Peça de 1 a 100 cartões.")
 			return
 		}
+		// Um link só é refeito quando a IA escolheu as frases (a página tinha mais de 3).
+		if g, err := a.geracao(ctx, id); err == nil && g.Origem == "link" {
+			var p paginaDoLink
+			if json.Unmarshal([]byte(g.Texto), &p) != nil || len(p.Frases) <= exemplosPorPagina {
+				erroJSON(w, http.StatusConflict, "Este link não passou pela IA: não há o que refazer.")
+				return
+			}
+		}
 		// Um pedido aprovado num baralho novo passa a mirar esse baralho (se ele ainda existir).
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '',
 				pedido = CASE WHEN ? = '' THEN pedido ELSE ? END,
 				quantidade = CASE WHEN ? = 0 THEN quantidade ELSE ? END,
 				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
 				resultado = ''
-			WHERE id = ? AND origem IN ('ia', 'acervo') AND estado IN (?, ?, ?, ?, ?)`,
+			WHERE id = ? AND origem IN ('ia', 'acervo', 'link') AND estado IN (?, ?, ?, ?, ?)`,
 			naFila, corpo.Pedido, corpo.Pedido, corpo.Quantidade, corpo.Quantidade, concluida,
 			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()

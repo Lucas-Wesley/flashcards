@@ -51,6 +51,13 @@ func novoAmbiente(t *testing.T) *ambiente {
 		case r.URL.Path == "/foto.png":
 			w.Write(pngDeTeste)
 			return
+		case r.URL.Path == "/shoot-up/":
+			// Sete exemplos: a IA escolhe os 3 mais didáticos.
+			fmt.Fprint(w, "<html><head><title>Shoot Up | O que significa este phrasal verb? - Mairo Vergara</title></head><body><h1>Shoot Up</h1>")
+			for i := 1; i <= 7; i++ {
+				fmt.Fprintf(w, `<p><em><strong>Example %d shot up.</strong><br>Exemplo %d disparou.</em></p><figure class="wp-block-audio"><audio src="/audio/%02d.mp3"></audio></figure>`, i, i, i)
+			}
+			fmt.Fprint(w, "</body></html>")
 		case r.URL.Path == "/run-into/":
 			pagina, _ := os.ReadFile("testdata/mairo.html")
 			w.Write(bytes.ReplaceAll(pagina, []byte("https://SITE"), []byte(e.wiki.URL)))

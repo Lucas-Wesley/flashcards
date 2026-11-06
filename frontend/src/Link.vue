@@ -45,8 +45,8 @@ onMounted(async () => {
     <h1>Adicionar</h1>
     <AbasAdicionar atual="link" />
     <p class="suave explicacao">
-      Cole o link de um post do <strong>Mairo Vergara</strong>. As frases de exemplo viram cartões: a frase em inglês na frente, com o áudio, e a
-      tradução no verso. Você revisa antes de entrarem no baralho. No celular, dá para usar o <strong>Compartilhar</strong> do navegador direto
+      Cole o link de um post do <strong>Mairo Vergara</strong>. Das frases de exemplo, as <strong>3 mais didáticas</strong> viram cartões (quando há
+      mais que isso, a IA escolhe, sem mudar nada nelas): a frase em inglês na frente, com o áudio, e a tradução no verso. Você revisa antes de entrarem no baralho. No celular, dá para usar o <strong>Compartilhar</strong> do navegador direto
       para o app.
     </p>
 

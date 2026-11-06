@@ -272,35 +272,133 @@ func (a *app) handleLink(w http.ResponseWriter, r *http.Request) {
 			existentes[f] = true
 		}
 	}
-	p := proposta{NomeBaralho: titulo}
-	comAudio, repetidas := 0, 0
+	pagina := paginaDoLink{Titulo: titulo, Total: len(frases)}
 	for _, f := range frases {
 		if existentes[f.Ingles] {
-			repetidas++
+			pagina.Repetidas++
 			continue
 		}
 		existentes[f.Ingles] = true
-		if f.Audio != "" {
-			comAudio++
-		}
-		p.Cartoes = append(p.Cartoes, cartaoProposto{Frente: f.Ingles, Verso: f.Traducao, Tags: slug(titulo), AudioURL: f.Audio})
+		pagina.Frases = append(pagina.Frases, f)
 	}
-	p.Observacoes = fmt.Sprintf("%d frases de exemplo de “%s”, %s.", len(frases), titulo, map[bool]string{true: "todas com áudio", false: fmt.Sprintf("%d com áudio", comAudio)}[comAudio == len(p.Cartoes) && comAudio > 0])
-	if repetidas > 0 {
-		p.Observacoes += fmt.Sprintf(" %d já estavam no baralho e ficaram de fora.", repetidas)
-	}
-	if len(p.Cartoes) == 0 {
+	if len(pagina.Frases) == 0 {
 		erroJSON(w, http.StatusConflict, "Todas as frases deste link já estão no baralho.")
 		return
 	}
 
-	texto, _ := json.Marshal(p)
-	res, err := a.db.ExecContext(ctx, `INSERT INTO geracoes (origem, pedido, quantidade, tipo, baralho_id, estado, proposta, criado_em, terminado_em)
-		VALUES ('link', ?, ?, ?, ?, ?, ?, ?, ?)`, corpo.URL, len(p.Cartoes), corpo.Tipo, corpo.BaralhoID, emRevisao, string(texto), a.agora(), a.agora())
+	// Até 3 frases, a proposta sai na hora. Mais que isso, a IA escolhe as mais didáticas, na fila.
+	estado, texto := emRevisao, ""
+	if len(pagina.Frases) > exemplosPorPagina {
+		estado = naFila
+	} else {
+		b, _ := json.Marshal(pagina.proposta(pagina.Frases, ""))
+		texto = string(b)
+	}
+	guardada, _ := json.Marshal(pagina)
+	res, err := a.db.ExecContext(ctx, `INSERT INTO geracoes (origem, pedido, texto, quantidade, tipo, baralho_id, estado, proposta, criado_em, terminado_em)
+		VALUES ('link', ?, ?, ?, ?, ?, ?, ?, ?, ?)`, corpo.URL, string(guardada), min(len(pagina.Frases), exemplosPorPagina), corpo.Tipo, corpo.BaralhoID,
+		estado, texto, a.agora(), map[bool]string{true: a.agora(), false: ""}[estado == emRevisao])
 	if err != nil {
 		falha(w, err)
 		return
 	}
 	id, _ := res.LastInsertId()
+	if estado == naFila {
+		a.fila.avisar()
+	}
 	a.responderGeracao(w, r, http.StatusCreated, id)
+}
+
+// ---------- Os exemplos mais didáticos ----------
+
+// Uma página do Mairo Vergara costuma ter muitas frases para o mesmo sentido. Viram cartões só as
+// 3 mais didáticas, que a IA escolhe (regras/escolher-exemplos.md, editável em Ajustes). Ela só
+// devolve os números: as frases, as traduções e os áudios continuam exatamente os da página.
+const exemplosPorPagina = 3
+
+// paginaDoLink é o que o leitor tirou da página, guardado no pedido para a IA escolher (e para refazer).
+type paginaDoLink struct {
+	Titulo    string           `json:"titulo"`
+	Total     int              `json:"total"`     // frases na página
+	Repetidas int              `json:"repetidas"` // já estavam no baralho
+	Frases    []fraseDeExemplo `json:"frases"`
+}
+
+func (p paginaDoLink) proposta(frases []fraseDeExemplo, motivo string) proposta {
+	r := proposta{NomeBaralho: p.Titulo}
+	comAudio := 0
+	for _, f := range frases {
+		if f.Audio != "" {
+			comAudio++
+		}
+		r.Cartoes = append(r.Cartoes, cartaoProposto{Frente: f.Ingles, Verso: f.Traducao, Tags: slug(p.Titulo), AudioURL: f.Audio})
+	}
+	audio := fmt.Sprintf("%d com áudio", comAudio)
+	if comAudio == len(frases) && comAudio > 0 {
+		audio = "todas com áudio"
+	}
+	if len(frases) < len(p.Frases) {
+		r.Observacoes = fmt.Sprintf("%d das %d frases de exemplo de “%s”, as mais didáticas na escolha da IA, %s.", len(frases), p.Total, p.Titulo, audio)
+	} else {
+		r.Observacoes = fmt.Sprintf("%d frases de exemplo de “%s”, %s.", len(frases), p.Titulo, audio)
+	}
+	if motivo = strings.TrimSpace(motivo); motivo != "" {
+		r.Observacoes += " " + motivo
+	}
+	if p.Repetidas > 0 {
+		r.Observacoes += fmt.Sprintf(" %d já estavam no baralho e ficaram de fora.", p.Repetidas)
+	}
+	return r
+}
+
+const esquemaEscolha = `{"type":"object","properties":{` +
+	`"escolhidas":{"type":"array","items":{"type":"integer"}},"motivo":{"type":"string"}},` +
+	`"required":["escolhidas","motivo"]}`
+
+func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*proposta, error) {
+	var p paginaDoLink
+	if err := json.Unmarshal([]byte(g.Texto), &p); err != nil || len(p.Frases) == 0 {
+		return nil, errors.New("o pedido não tem as frases da página: mande o link de novo")
+	}
+	var lista strings.Builder
+	for i, f := range p.Frases {
+		fmt.Fprintf(&lista, "%d. %s\n   %s\n", i+1, f.Ingles, strings.ReplaceAll(f.Traducao, "\n", " "))
+	}
+	r, err := a.chamarClaude(ctx, pedidoClaude{
+		pasta: pasta,
+		regra: "escolher-exemplos.md",
+		instrucao: fmt.Sprintf("Página do Mairo Vergara sobre %q (%s). Ela tem estas frases de exemplo, numeradas (inglês e tradução):\n\n%s\n"+
+			"Escolha as %d mais didáticas para virarem flashcards. Devolva os números delas em escolhidas e, em motivo, uma frase curta dizendo o critério.",
+			p.Titulo, g.Pedido, lista.String(), exemplosPorPagina),
+		esquema:     esquemaEscolha,
+		semInternet: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var escolha struct {
+		Escolhidas []int  `json:"escolhidas"`
+		Motivo     string `json:"motivo"`
+	}
+	if err := dadosDaResposta(r, &escolha); err != nil {
+		return nil, err
+	}
+	// Na ordem da página, sem repetir, só números que existem, no máximo 3.
+	marcadas := map[int]bool{}
+	for _, n := range escolha.Escolhidas {
+		if n >= 1 && n <= len(p.Frases) && len(marcadas) < exemplosPorPagina {
+			marcadas[n] = true
+		}
+	}
+	var frases []fraseDeExemplo
+	for i, f := range p.Frases {
+		if marcadas[i+1] {
+			frases = append(frases, f)
+		}
+	}
+	if len(frases) == 0 {
+		return nil, errors.New("a IA não escolheu nenhuma frase da página")
+	}
+	pr := p.proposta(frases, escolha.Motivo)
+	return &pr, nil
 }

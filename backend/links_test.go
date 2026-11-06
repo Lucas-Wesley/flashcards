@@ -102,3 +102,42 @@ func TestCartoesDeUmLink(t *testing.T) {
 		t.Errorf("áudio inválido aceito: %d", s)
 	}
 }
+
+func TestLinkComMuitasFrasesAIAEscolheAsMaisDidaticas(t *testing.T) {
+	e := novoAmbiente(t)
+	link := e.wiki.URL + "/shoot-up/"
+	var g geracao
+	if s := e.pedir("POST", "/api/links", map[string]string{"url": link}, &g); s != http.StatusCreated {
+		t.Fatalf("link: %d", s)
+	}
+	if g.Origem != "link" || g.Estado != naFila || g.Quantidade != 3 || g.Proposta != nil {
+		t.Fatalf("pedido na fila: %+v", g)
+	}
+	id := strconv.FormatInt(g.ID, 10)
+	g = e.esperarGeracao(g.ID, emRevisao)
+	// A IA devolveu 5, 2, 99, 2 e 6: fica com 2, 5 e 6, na ordem da página, sem mudar as frases.
+	var frentes []string
+	for _, c := range g.Proposta.Cartoes {
+		frentes = append(frentes, c.Frente)
+	}
+	if strings.Join(frentes, " | ") != "Example 2 shot up. | Example 5 shot up. | Example 6 shot up." {
+		t.Fatalf("escolhidas: %v", frentes)
+	}
+	c := g.Proposta.Cartoes[1]
+	if c.Verso != "Exemplo 5 disparou." || !strings.HasSuffix(c.AudioURL, "/audio/05.mp3") || c.Tags != "shoot-up" || g.Proposta.NomeBaralho != "Shoot Up" {
+		t.Errorf("cartão: %+v / %q", c, g.Proposta.NomeBaralho)
+	}
+	obs := g.Proposta.Observacoes
+	if !strings.Contains(obs, "3 das 7 frases de exemplo de “Shoot Up”, as mais didáticas") || !strings.Contains(obs, "Uma de cada situação.") ||
+		!strings.Contains(obs, "Bash,Read") || strings.Contains(obs, "Ferramentas: WebSearch") {
+		t.Errorf("observações (e a IA sem internet): %q", obs)
+	}
+
+	// Refazer pede outra escolha à IA, com as mesmas frases.
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", nil, &g); s != http.StatusOK || g.Estado != naFila {
+		t.Fatalf("refazer: %d %+v", s, g)
+	}
+	if g = e.esperarGeracao(g.ID, emRevisao); len(g.Proposta.Cartoes) != 3 {
+		t.Errorf("nova escolha: %+v", g.Proposta)
+	}
+}
