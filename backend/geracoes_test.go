@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -162,6 +163,39 @@ func TestGeracaoQueFalhaPodeSerRefeitaECancelada(t *testing.T) {
 	}
 	if s := e.pedir("POST", "/api/geracoes", map[string]any{"pedido": "x", "quantidade": 500}, nil); s != http.StatusBadRequest {
 		t.Errorf("500 cartões aceitos: %d", s)
+	}
+}
+
+func TestBuscaDeImagemOrdenaPeloCartao(t *testing.T) {
+	e := novoAmbiente(t)
+	q := url.Values{"q": {"Bandeira do Brasil"}}
+	var achadas []imagemAchada
+	e.pedir("GET", "/api/imagens?"+q.Encode(), nil, &achadas)
+	var titulos []string
+	for _, a := range achadas {
+		titulos = append(titulos, a.Fonte+": "+a.Titulo)
+	}
+	// Sem contexto, vale o termo (no empate, a ordem das fontes); o PDF do Commons fica de fora.
+	esperado := []string{"Wikipédia: Bandeira do Brasil", "Wikimedia Commons: Flag of Brazil", "Wikipédia: Bandeira do Império do Brasil", "Openverse · flickr: Bandeira na praia"}
+	if !slices.Equal(titulos, esperado) {
+		t.Fatalf("sem contexto: %v", titulos)
+	}
+	if achadas[1].Autor != "Fulano" || achadas[3].Licenca != "CC BY-NC 2.0" {
+		t.Errorf("crédito: %+v", achadas)
+	}
+
+	// Num cartão sobre 1822 e o Império, a bandeira da época vem antes da atual.
+	q.Set("contexto", "Por que a bandeira do Brasil mudou em 1822?\nPor causa da Independência: as armas do novo Império.")
+	achadas = nil
+	e.pedir("GET", "/api/imagens?"+q.Encode(), nil, &achadas)
+	titulos = nil
+	for _, a := range achadas {
+		titulos = append(titulos, a.Titulo)
+	}
+	// O ano do cartão também vai para o Commons, que acha a bandeira de 1822.
+	esperado = []string{"Flag of Brazil (1822–1853)", "Bandeira do Império do Brasil", "Bandeira do Brasil", "Flag of Brazil", "Bandeira na praia"}
+	if !slices.Equal(titulos, esperado) {
+		t.Fatalf("com contexto: %v", titulos)
 	}
 }
 

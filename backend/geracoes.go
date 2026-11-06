@@ -60,7 +60,7 @@ type cartaoProposto struct {
 	Frente string `json:"frente"`
 	Verso  string `json:"verso"`
 	Tags   string `json:"tags"`
-	// Imagem: o título do artigo da Wikipédia de onde tirar a foto, quando a IA acha que ajuda.
+	// Imagem: o que a foto deve mostrar (o termo da busca), quando a IA acha que ajuda.
 	// ImagemURL: a foto encontrada; só é baixada para o servidor quando o Lucas aprova.
 	Imagem    string `json:"imagem"`
 	ImagemURL string `json:"imagem_url"`
@@ -284,12 +284,13 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		}
 	}
 
-	// As fotos vêm da Wikipédia pelo título que a IA indicou; sem foto, o cartão segue sem imagem.
+	// As fotos vêm da busca pelo que a IA indicou, ordenada pelo cartão inteiro (frente, verso e tags);
+	// sem foto, o cartão segue sem imagem.
 	for i, c := range p.Cartoes {
 		if c.Imagem == "" || c.ImagemURL != "" || ctx.Err() != nil {
 			continue
 		}
-		if achadas, err := a.buscarImagens(ctx, c.Imagem, 1); err == nil && len(achadas) > 0 {
+		if achadas, err := a.buscarImagens(ctx, c.Imagem, c.Frente+"\n"+c.Verso+"\n"+c.Tags, 1, false); err == nil && len(achadas) > 0 {
 			p.Cartoes[i].ImagemURL = achadas[0].URL
 		}
 	}

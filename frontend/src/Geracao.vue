@@ -2,6 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
 import { api } from './api.js'
+import { contextoDoCartao, termoDaBusca } from './busca.js'
 
 // Um pedido à IA ou um link: enquanto a IA trabalha, o andamento; depois, a proposta para revisar.
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
@@ -221,7 +222,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
                   <button v-if="c.imagem_url" type="button" class="botao" @click="c.imagem_url = ''">Sem imagem</button>
                 </div>
               </div>
-              <BuscaDeImagem v-if="buscandoEm === i" :termo="c.imagem || c.verso.split('\n')[0]" @escolher="trocarImagem(i, $event)" @fechar="buscandoEm = -1" />
+              <BuscaDeImagem v-if="buscandoEm === i" :termo="c.imagem || termoDaBusca(c.frente)" :contexto="contextoDoCartao(c)" @escolher="trocarImagem(i, $event)" @fechar="buscandoEm = -1" />
             </div>
           </li>
         </ul>

@@ -15,9 +15,12 @@ type config struct {
 	regras string // instruções padrão da IA (regras/ do repositório)
 	claude string
 	modelo string // vazio = o padrão do Claude Code
-	// Busca de imagens: a API da Wikipédia ("%s" é o idioma) e os servidores de onde o app aceita
-	// baixar imagem. Os testes trocam os dois por um servidor falso.
+	// Busca de imagens: a API da Wikipédia ("%s" é o idioma), a do Commons, a do Openverse (vazias,
+	// a fonte fica de fora) e os servidores de onde o app aceita baixar imagem. Os testes trocam
+	// todos por um servidor falso.
 	wiki          string
+	commons       string
+	openverse     string
 	hostsDeImagem []string
 	// Sites de onde o app sabe tirar cartões de um link (o leitor do Mairo Vergara). O áudio das
 	// frases também vem deles.
@@ -31,7 +34,9 @@ func configDoAmbiente(dados string) config {
 		claude:        env("CLAUDE_BIN", "claude"),
 		modelo:        os.Getenv("CLAUDE_MODEL"),
 		wiki:          env("WIKI_API", "https://%s.wikipedia.org/w/api.php"),
-		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org"), ","),
+		commons:       env("COMMONS_API", "https://commons.wikimedia.org/w/api.php"),
+		openverse:     env("OPENVERSE_API", "https://api.openverse.org/v1/images/"),
+		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
 		sitesMairo:    strings.Split(env("SITES_MAIRO", "www.mairovergara.com,mairovergara.com"), ","),
 	}
 }

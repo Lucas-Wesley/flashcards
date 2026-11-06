@@ -4,6 +4,7 @@ import AbasAdicionar from './AbasAdicionar.vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, api, lembrar } from './api.js'
 import { vencimento } from './tempo.js'
+import { contextoDoCartao, termoDaBusca } from './busca.js'
 
 // Adicionar (sem id) ou editar (com id) uma nota. Ao adicionar, o baralho, o tipo e as tags ficam
 // para a próxima, e o foco volta para a frente: dá para cadastrar uma lista em sequência.
@@ -215,7 +216,7 @@ onMounted(carregar)
           </label>
           <span v-if="trazendoImagem" class="suave">Trazendo a imagem…</span>
         </div>
-        <BuscaDeImagem v-if="buscandoImagem && !dados.imagem" :termo="dados.verso.split('\n')[0]" @escolher="escolherImagem" @fechar="buscandoImagem = false" />
+        <BuscaDeImagem v-if="buscandoImagem && !dados.imagem" :termo="termoDaBusca(dados.verso)" :contexto="contextoDoCartao(dados)" @escolher="escolherImagem" @fechar="buscandoImagem = false" />
       </div>
       <label>
         <span class="rotulo-campo">Tags</span>

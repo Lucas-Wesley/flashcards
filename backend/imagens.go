@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,15 +14,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
 
 // Imagens (e áudios) dos cartões. Ficam em DATA_DIR/media, com o nome tirado do conteúdo (o mesmo arquivo
 // nunca é guardado duas vezes); o banco guarda só o nome. Vêm de dois lugares:
-//   - da Wikipédia, pela API dela: a busca devolve a foto principal de cada artigo. É assim que a
-//     IA "acha" imagens: ela indica o artigo, e o servidor busca a foto, sem a IA navegar;
+//   - da busca em fontes abertas (busca.go). É assim que a IA "acha" imagens: ela diz o que a foto
+//     deve mostrar, e o servidor busca, sem a IA navegar;
 //   - do aparelho, enviadas pelo editor.
 
 const tamanhoMaximoDeImagem = 8 << 20
@@ -41,78 +39,9 @@ var extensoes = map[string]string{"image/jpeg": "jpg", "image/png": "png", "imag
 
 var clienteWeb = &http.Client{Timeout: 20 * time.Second}
 
-type imagemAchada struct {
-	Titulo string `json:"titulo"`
-	URL    string `json:"url"`
-}
-
-// buscarImagens procura artigos na Wikipédia em português e, sem resultado com foto, em inglês.
-func (a *app) buscarImagens(ctx context.Context, termo string, limite int) ([]imagemAchada, error) {
-	var ultimoErro error
-	for _, idioma := range []string{"pt", "en"} {
-		achadas, err := a.buscarNaWikipedia(ctx, idioma, termo, limite)
-		if err != nil {
-			ultimoErro = err
-			continue
-		}
-		if len(achadas) > 0 {
-			return achadas, nil
-		}
-	}
-	return []imagemAchada{}, ultimoErro
-}
-
-func (a *app) buscarNaWikipedia(ctx context.Context, idioma, termo string, limite int) ([]imagemAchada, error) {
-	base := a.cfg.wiki
-	if strings.Contains(base, "%s") {
-		base = fmt.Sprintf(base, idioma)
-	}
-	q := url.Values{
-		"action": {"query"}, "format": {"json"}, "formatversion": {"2"},
-		"generator": {"search"}, "gsrsearch": {termo}, "gsrnamespace": {"0"}, "gsrlimit": {"10"},
-		"prop": {"pageimages"}, "piprop": {"thumbnail"}, "pithumbsize": {"800"},
-	}
-	req, err := http.NewRequestWithContext(ctx, "GET", base+"?"+q.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", agenteWiki)
-	res, err := clienteWeb.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("a Wikipédia não respondeu: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("a Wikipédia respondeu %d", res.StatusCode)
-	}
-	var corpo struct {
-		Query struct {
-			Pages []struct {
-				Title     string `json:"title"`
-				Index     int    `json:"index"`
-				Thumbnail struct {
-					Source string `json:"source"`
-				} `json:"thumbnail"`
-			} `json:"pages"`
-		} `json:"query"`
-	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, 2<<20)).Decode(&corpo); err != nil {
-		return nil, err
-	}
-	paginas := corpo.Query.Pages
-	sort.Slice(paginas, func(i, j int) bool { return paginas[i].Index < paginas[j].Index })
-	achadas := []imagemAchada{}
-	for _, p := range paginas {
-		if p.Thumbnail.Source != "" && len(achadas) < limite {
-			achadas = append(achadas, imagemAchada{Titulo: p.Title, URL: p.Thumbnail.Source})
-		}
-	}
-	return achadas, nil
-}
-
-// baixarImagem traz uma imagem de um servidor permitido (a Wikipédia) e devolve o nome guardado.
+// baixarImagem traz uma imagem de um servidor permitido (HOSTS_DE_IMAGEM) e devolve o nome guardado.
 func (a *app) baixarImagem(ctx context.Context, endereco string) (string, error) {
-	r, err := baixar(ctx, endereco, a.cfg.hostsDeImagem, "só dá para baixar imagens da Wikipédia")
+	r, err := baixar(ctx, endereco, a.cfg.hostsDeImagem, "só dá para baixar imagens da Wikipédia, do Commons e do Openverse")
 	if err != nil {
 		return "", err
 	}
@@ -155,6 +84,11 @@ func baixar(ctx context.Context, endereco string, hosts []string, recusa string)
 	if res.StatusCode != http.StatusOK {
 		res.Body.Close()
 		return nil, fmt.Errorf("o arquivo não veio: %d", res.StatusCode)
+	}
+	// Um redirecionamento não pode levar para fora dos servidores permitidos.
+	if !slices.Contains(hosts, res.Request.URL.Host) {
+		res.Body.Close()
+		return nil, errors.New(recusa)
 	}
 	return res.Body, nil
 }
@@ -204,7 +138,7 @@ func (a *app) handleBuscarImagens(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "Diga o que procurar.")
 		return
 	}
-	achadas, err := a.buscarImagens(r.Context(), termo, 8)
+	achadas, err := a.buscarImagens(r.Context(), termo, r.URL.Query().Get("contexto"), 15, true)
 	if err != nil && len(achadas) == 0 {
 		erroJSON(w, http.StatusBadGateway, err.Error())
 		return

@@ -59,6 +59,31 @@ func novoAmbiente(t *testing.T) *ambiente {
 			w.Write(append([]byte("ID3\x04\x00\x00\x00\x00\x00\x00"), r.URL.Path...))
 			return
 		}
+		// Commons falso: a bandeira atual e a do Império; com o ano, só a do Império.
+		if r.URL.Path == "/commons/api.php" {
+			busca := r.URL.Query().Get("gsrsearch")
+			switch {
+			case strings.Contains(busca, "Bandeira do Brasil 1822"):
+				fmt.Fprintf(w, `{"query":{"pages":[{"title":"File:Flag of Brazil (1822–1853).svg","index":1,"imageinfo":[{"thumburl":"%s/imperio.png","mime":"image/svg+xml","extmetadata":{"LicenseShortName":{"value":"Public domain"}}}]}]}}`, e.wiki.URL)
+			case strings.Contains(busca, "Bandeira do Brasil"):
+				fmt.Fprintf(w, `{"query":{"pages":[{"title":"File:Flag of Brazil.svg","index":1,"imageinfo":[{"thumburl":"%s/atual.png","mime":"image/svg+xml","extmetadata":{"Artist":{"value":"<a href=\"x\">Fulano</a>"}}}]},{"title":"File:Hino.pdf","index":2,"imageinfo":[{"thumburl":"%s/hino.png","mime":"application/pdf"}]}]}}`, e.wiki.URL, e.wiki.URL)
+			default:
+				w.Write([]byte(`{"batchcomplete":true}`))
+			}
+			return
+		}
+		if r.URL.Path == "/openverse/" {
+			if strings.Contains(r.URL.Query().Get("q"), "Bandeira do Brasil") && r.URL.Query().Get("excluded_source") == "wikimedia" {
+				fmt.Fprintf(w, `{"results":[{"title":"Bandeira na praia","thumbnail":"%s/praia.png","license":"by-nc","license_version":"2.0","creator":"alguém","source":"flickr"}]}`, e.wiki.URL)
+				return
+			}
+			w.Write([]byte(`{"results":[]}`))
+			return
+		}
+		if strings.Contains(r.URL.Query().Get("gsrsearch"), "Bandeira do Brasil") {
+			fmt.Fprintf(w, `{"query":{"pages":[{"title":"Bandeira do Brasil","index":1,"thumbnail":{"source":"%s/artigo.png"}},{"title":"Bandeira do Império do Brasil","index":2,"thumbnail":{"source":"%s/artigo-imperio.png"}}]}}`, e.wiki.URL, e.wiki.URL)
+			return
+		}
 		if strings.Contains(r.URL.Query().Get("gsrsearch"), "Lula") {
 			fmt.Fprintf(w, `{"query":{"pages":[{"title":"Lula (molusco)","index":2},{"title":"Luiz Inácio Lula da Silva","index":1,"thumbnail":{"source":"%s/foto.png"}}]}}`, e.wiki.URL)
 			return
@@ -71,7 +96,7 @@ func novoAmbiente(t *testing.T) *ambiente {
 	dados := t.TempDir()
 	e.dados = dados
 	cfg := config{dados: dados, regras: absoluto("../regras"), claude: absoluto("testdata/claude-falso"),
-		wiki: e.wiki.URL + "/w/api.php", hostsDeImagem: []string{wikiURL.Host}, sitesMairo: []string{wikiURL.Host}}
+		wiki: e.wiki.URL + "/w/api.php", commons: e.wiki.URL + "/commons/api.php", openverse: e.wiki.URL + "/openverse/", hostsDeImagem: []string{wikiURL.Host}, sitesMairo: []string{wikiURL.Host}}
 	a, err := novoApp(db, novoRelogio(fuso, func() time.Time { return e.agora }), cfg)
 	if err != nil {
 		t.Fatal(err)
