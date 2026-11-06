@@ -239,3 +239,67 @@ func TestMigraBancoAntigo(t *testing.T) {
 		t.Fatalf("migração: %v %q", err, imagem)
 	}
 }
+
+// O pedido aprovado é editado e refeito: a IA trabalha no baralho criado, recebe os cartões que já
+// existem, e aprovar de novo atualiza os de mesma frente (com o histórico e a foto) em vez de duplicar.
+func TestRefazerPedidoAprovadoAtualizaOsCartoes(t *testing.T) {
+	e := novoAmbiente(t)
+	g := e.pedirGeracao(map[string]any{"pedido": "presidentes", "quantidade": 5})
+	g = e.esperarGeracao(g.ID, emRevisao)
+	id := strconv.FormatInt(g.ID, 10)
+	var res struct {
+		BaralhoID   string `json:"baralho_id"`
+		Criadas     int    `json:"criadas"`
+		Atualizadas int    `json:"atualizadas"`
+	}
+	e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"nome_baralho": "Presidentes", "cartoes": g.Proposta.Cartoes}, &res)
+	if res.Criadas != 2 {
+		t.Fatalf("primeira aprovação: %+v", res)
+	}
+	es := e.responder(e.estudo(res.BaralhoID), 3)
+	var antes []nota
+	e.pedir("GET", "/api/notas?q=2003", nil, &antes)
+
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", map[string]any{"pedido": "presidentes PEDIDO EDITADO", "quantidade": 3}, &g); s != http.StatusOK {
+		t.Fatalf("refazer o aprovado: %d", s)
+	}
+	if g.Pedido != "presidentes PEDIDO EDITADO" || g.Quantidade != 3 || g.BaralhoID != res.BaralhoID {
+		t.Fatalf("pedido refeito: %+v", g)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+	if !strings.Contains(g.Proposta.Observacoes, "Recebeu o pedido editado.") || !strings.Contains(g.Proposta.Observacoes, "Recebeu os cartões existentes.") {
+		t.Fatalf("observações: %q", g.Proposta.Observacoes)
+	}
+	c := g.Proposta.Cartoes[0]
+	if !c.Atualiza || c.ImagemURL != "/api/imagens/"+antes[0].Imagem {
+		t.Fatalf("o cartão existente devia vir como atualização, com a foto que tem: %+v", c)
+	}
+
+	// Refazer com a proposta ainda em revisão também vale (ela é trocada).
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", nil, &g); s != http.StatusOK {
+		t.Fatalf("refazer em revisão: %d", s)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+
+	g.Proposta.Cartoes[0].Verso = "Lula: desenhou a bandeira em 1889"
+	e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"cartoes": g.Proposta.Cartoes}, &res)
+	if res.Criadas != 0 || res.Atualizadas != 2 {
+		t.Fatalf("segunda aprovação: %+v", res)
+	}
+	var depois []nota
+	e.pedir("GET", "/api/notas?q=2003", nil, &depois)
+	if len(depois) != 1 || depois[0].ID != antes[0].ID || depois[0].Verso != "Lula: desenhou a bandeira em 1889" || depois[0].Imagem != antes[0].Imagem {
+		t.Fatalf("nota atualizada: %+v", depois)
+	}
+	var b resumo
+	e.pedir("GET", "/api/baralhos/"+res.BaralhoID, nil, &b)
+	if b.Cartoes != 2 || es.FeitosHoje != 1 || b.FeitosHoje != 1 {
+		t.Fatalf("o histórico devia ficar: %+v", b)
+	}
+
+	var doBaralho []geracao
+	e.pedir("GET", "/api/geracoes?baralho="+res.BaralhoID, nil, &doBaralho)
+	if len(doBaralho) != 1 || doBaralho[0].ID != g.ID {
+		t.Fatalf("pedidos do baralho: %+v", doBaralho)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"hash/fnv"
 	"net/http"
 	"time"
 
@@ -78,8 +79,9 @@ func (a *app) contagem(ctx context.Context, f fila) (contagem, error) {
 	return c, nil
 }
 
-// proximo devolve o cartão da vez, ou nil quando não há nada para agora.
-func (a *app) proximo(ctx context.Context, f fila) (*cartao, error) {
+// proximo devolve o cartão da vez e o passo da fila de onde ele veio (0 a 3), ou nil quando não
+// há nada para agora.
+func (a *app) proximo(ctx context.Context, f fila) (*cartao, int, error) {
 	irmaos := []any{f.b.ID, hora(f.inicio)}
 	type passo struct {
 		ativo  bool
@@ -92,7 +94,7 @@ func (a *app) proximo(ctx context.Context, f fila) (*cartao, error) {
 		{f.restamNovos > 0, novos + semIrmaos + ` ORDER BY posicao`, irmaos},
 		{true, emAprender + ` ORDER BY vence_em`, []any{hora(f.agora.Add(aprenderAdiante))}},
 	}
-	for _, p := range passos {
+	for i, p := range passos {
 		if !p.ativo {
 			continue
 		}
@@ -102,11 +104,31 @@ func (a *app) proximo(ctx context.Context, f fila) (*cartao, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		return &c, nil
+		return &c, i, nil
 	}
-	return nil, nil
+	return nil, 0, nil
+}
+
+// vemAntes decide, no "Estudar" com todos os baralhos, qual dos próximos de cada baralho aparece:
+// o passo da fila manda (aprendendo vencido, revisões, novos, aprender adiante). No mesmo passo, os
+// aprendendo saem pela hora; revisões e novos, por um sorteio fixo pelo id do cartão, para os
+// baralhos se misturarem em vez de virem um inteiro depois do outro.
+func vemAntes(c *cartao, passo int, outro *cartao, passoDoOutro int) bool {
+	if passo != passoDoOutro {
+		return passo < passoDoOutro
+	}
+	if passo == 0 || passo == 3 {
+		return c.VenceEm.Before(outro.VenceEm)
+	}
+	return sorteio(c.ID) < sorteio(outro.ID)
+}
+
+func sorteio(id string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(id))
+	return h.Sum32()
 }
 
 type cartaoDeEstudo struct {
@@ -126,7 +148,10 @@ type cartaoDeEstudo struct {
 }
 
 type estudo struct {
-	Baralho    baralho         `json:"baralho"`
+	// Baralho é o do cartão da vez (no "Estudar" com todos, muda a cada cartão).
+	Baralho baralho `json:"baralho"`
+	// Todos: a fila mistura todos os baralhos; a contagem e as revisões de hoje são a soma deles.
+	Todos      bool            `json:"todos"`
 	Contagem   contagem        `json:"contagem"`
 	FeitosHoje int             `json:"feitos_hoje"`
 	Cartao     *cartaoDeEstudo `json:"cartao"`
@@ -135,30 +160,60 @@ type estudo struct {
 	EsperaAte string `json:"espera_ate,omitempty"`
 }
 
-// montarEstudo monta a tela de estudo. Com "forcar", mostra aquele cartão (o que acabou de ser
-// desfeito) em vez do próximo da fila.
-func (a *app) montarEstudo(ctx context.Context, b baralho, forcar *cartao) (estudo, error) {
-	f, err := a.montarFila(ctx, b)
-	if err != nil {
-		return estudo{}, err
+// montarEstudo monta a tela de estudo de um baralho ou, com todos=true, de todos juntos: cada
+// baralho mantém a própria fila e os próprios limites, e o próximo cartão é o que vem antes entre
+// os próximos de cada um. Com "forcar", mostra aquele cartão (o que acabou de ser desfeito) em vez
+// do próximo da fila.
+func (a *app) montarEstudo(ctx context.Context, baralhos []baralho, todos bool, forcar *cartao) (estudo, error) {
+	e := estudo{Todos: todos}
+	if !todos && len(baralhos) > 0 {
+		e.Baralho = baralhos[0]
 	}
-	e := estudo{Baralho: b, FeitosHoje: f.feitosHoje}
-	if e.Contagem, err = a.contagem(ctx, f); err != nil {
-		return e, err
-	}
-	c := forcar
-	if c == nil {
-		if c, err = a.proximo(ctx, f); err != nil {
+	var escolhido *cartao
+	var passoEscolhido int
+	var filaEscolhida fila
+	for _, b := range baralhos {
+		f, err := a.montarFila(ctx, b)
+		if err != nil {
 			return e, err
 		}
+		cont, err := a.contagem(ctx, f)
+		if err != nil {
+			return e, err
+		}
+		e.FeitosHoje += f.feitosHoje
+		e.Contagem.Novos += cont.Novos
+		e.Contagem.Aprendendo += cont.Aprendendo
+		e.Contagem.Revisar += cont.Revisar
+
+		if forcar != nil {
+			if forcar.BaralhoID == b.ID {
+				escolhido, filaEscolhida = forcar, f
+			}
+			continue
+		}
+		c, passo, err := a.proximo(ctx, f)
+		if err != nil {
+			return e, err
+		}
+		if c != nil && (escolhido == nil || vemAntes(c, passo, escolhido, passoEscolhido)) {
+			escolhido, passoEscolhido, filaEscolhida = c, passo, f
+		}
+		if c == nil {
+			var espera sql.NullString
+			a.db.QueryRowContext(ctx, `SELECT MIN(vence_em) FROM cartoes WHERE `+doBaralho+` AND estado IN (1, 3) AND vence_em < ?`,
+				b.ID, hora(f.fim)).Scan(&espera)
+			if espera.Valid && (e.EsperaAte == "" || espera.String < e.EsperaAte) {
+				e.EsperaAte = espera.String
+			}
+		}
 	}
-	if c == nil {
-		var espera sql.NullString
-		a.db.QueryRowContext(ctx, `SELECT MIN(vence_em) FROM cartoes WHERE `+doBaralho+` AND estado IN (1, 3) AND vence_em < ?`,
-			b.ID, hora(f.fim)).Scan(&espera)
-		e.EsperaAte = espera.String
+	if escolhido == nil {
 		return e, nil
 	}
+	e.EsperaAte = ""
+	c, b := escolhido, filaEscolhida.b
+	e.Baralho = b
 	var frente, verso, tags, imagem, audio string
 	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem, audio FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem, &audio); err != nil {
 		return e, err
@@ -167,8 +222,38 @@ func (a *app) montarEstudo(ctx context.Context, b baralho, forcar *cartao) (estu
 		frente, verso = verso, frente
 	}
 	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
-	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, f.agora)
+	var err error
+	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, filaEscolhida.agora)
 	return e, err
+}
+
+func (a *app) todosOsBaralhos(ctx context.Context) ([]baralho, error) {
+	rows, err := a.db.QueryContext(ctx, `SELECT `+colunasBaralho+` FROM baralhos ORDER BY nome COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var lista []baralho
+	for rows.Next() {
+		b, err := lerBaralho(rows)
+		if err != nil {
+			return nil, err
+		}
+		lista = append(lista, b)
+	}
+	return lista, rows.Err()
+}
+
+// estudoDe monta a tela seguinte do mesmo modo do pedido: de um baralho, ou de todos.
+func (a *app) estudoDe(ctx context.Context, b baralho, todos bool, forcar *cartao) (estudo, error) {
+	if !todos {
+		return a.montarEstudo(ctx, []baralho{b}, false, forcar)
+	}
+	lista, err := a.todosOsBaralhos(ctx)
+	if err != nil {
+		return estudo{}, err
+	}
+	return a.montarEstudo(ctx, lista, true, forcar)
 }
 
 func (a *app) handleEstudo(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +261,7 @@ func (a *app) handleEstudo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	e, err := a.montarEstudo(r.Context(), b, nil)
+	e, err := a.estudoDe(r.Context(), b, false, nil)
 	if err != nil {
 		falha(w, err)
 		return
@@ -184,12 +269,25 @@ func (a *app) handleEstudo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, e)
 }
 
-// handleResponder aplica a nota e já devolve o próximo cartão do baralho.
+// handleEstudoGeral: o "Estudar" com todos os baralhos misturados.
+func (a *app) handleEstudoGeral(w http.ResponseWriter, r *http.Request) {
+	e, err := a.estudoDe(r.Context(), baralho{}, true, nil)
+	if err != nil {
+		falha(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
+}
+
+// handleResponder aplica a nota e já devolve o próximo cartão do baralho (ou, com "todos", o próximo
+// de todos os baralhos). A revisão fica registrada no baralho do cartão, como se ele tivesse sido
+// estudado por lá.
 func (a *app) handleResponder(w http.ResponseWriter, r *http.Request) {
 	var corpo struct {
 		Nota       int   `json:"nota"`
 		Repeticoes int64 `json:"repeticoes"`
 		DuracaoMs  int64 `json:"duracao_ms"`
+		Todos      bool  `json:"todos"`
 	}
 	if !lerCorpo(w, r, &corpo) {
 		return
@@ -245,7 +343,7 @@ func (a *app) handleResponder(w http.ResponseWriter, r *http.Request) {
 		falha(w, err)
 		return
 	}
-	e, err := a.montarEstudo(ctx, b, nil)
+	e, err := a.estudoDe(ctx, b, corpo.Todos, nil)
 	if err != nil {
 		falha(w, err)
 		return
@@ -259,6 +357,15 @@ func (a *app) handleDesfazer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	a.desfazer(w, r, b, false)
+}
+
+// handleDesfazerGeral volta a última resposta de qualquer baralho (no "Estudar" com todos).
+func (a *app) handleDesfazerGeral(w http.ResponseWriter, r *http.Request) {
+	a.desfazer(w, r, baralho{}, true)
+}
+
+func (a *app) desfazer(w http.ResponseWriter, r *http.Request, b baralho, todos bool) {
 	ctx := r.Context()
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -269,7 +376,12 @@ func (a *app) handleDesfazer(w http.ResponseWriter, r *http.Request) {
 
 	var id int64
 	var antes string
-	err = tx.QueryRowContext(ctx, `SELECT id, antes FROM revisoes WHERE baralho_id = ? ORDER BY id DESC LIMIT 1`, b.ID).Scan(&id, &antes)
+	ultima := `SELECT id, antes FROM revisoes WHERE baralho_id = ? ORDER BY id DESC LIMIT 1`
+	args := []any{b.ID}
+	if todos {
+		ultima, args = `SELECT id, antes FROM revisoes ORDER BY id DESC LIMIT 1`, nil
+	}
+	err = tx.QueryRowContext(ctx, ultima, args...).Scan(&id, &antes)
 	if errors.Is(err, sql.ErrNoRows) {
 		erroJSON(w, http.StatusNotFound, "Nada para desfazer.")
 		return
@@ -295,7 +407,7 @@ func (a *app) handleDesfazer(w http.ResponseWriter, r *http.Request) {
 		falha(w, err)
 		return
 	}
-	e, err := a.montarEstudo(ctx, b, &c)
+	e, err := a.estudoDe(ctx, b, todos, &c)
 	if err != nil {
 		falha(w, err)
 		return

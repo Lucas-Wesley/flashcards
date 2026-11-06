@@ -10,6 +10,8 @@ const b = ref(null)
 const erro = ref('')
 const opcoes = ref({ nome: '', novos: 20, revisoes: 200, retencao: 90 })
 const salvando = ref(false)
+// Os pedidos à IA que criaram ou alimentaram este baralho: dá para abrir, editar o pedido e refazer.
+const pedidos = ref([])
 
 const paraHoje = computed(() => (b.value ? b.value.contagem.novos + b.value.contagem.aprendendo + b.value.contagem.revisar : 0))
 
@@ -60,7 +62,14 @@ async function apagar() {
   }
 }
 
-onMounted(carregar)
+onMounted(async () => {
+  carregar()
+  try {
+    pedidos.value = await api(`/api/geracoes?baralho=${props.id}`)
+  } catch {
+    // Sem a lista, a seção não aparece.
+  }
+})
 </script>
 
 <template>
@@ -100,6 +109,15 @@ onMounted(carregar)
         {{ b.feitos_hoje }} {{ b.feitos_hoje === 1 ? 'revisão' : 'revisões' }} hoje<template v-if="b.suspensos"> · {{ b.suspensos }} {{ b.suspensos === 1 ? 'suspenso' : 'suspensos' }}</template>
       </p>
 
+      <template v-if="pedidos.length">
+        <p class="rotulo">Pedidos à IA</p>
+        <ul class="lista pedidos">
+          <li v-for="p in pedidos" :key="p.id">
+            <a class="pedido" :href="`#/geracao/${p.id}`">“{{ p.pedido }}”</a>
+          </li>
+        </ul>
+      </template>
+
       <p class="rotulo">Opções</p>
       <form class="opcoes" @submit.prevent="salvar">
         <label>
@@ -134,6 +152,21 @@ onMounted(carregar)
 </template>
 
 <style scoped>
+.pedido {
+  display: block;
+  overflow: hidden;
+  padding: 12px 0;
+  color: inherit;
+  font-family: var(--leitura);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pedido:hover {
+  color: var(--azul);
+}
+
 .voltar {
   display: inline-block;
   margin-bottom: 10px;

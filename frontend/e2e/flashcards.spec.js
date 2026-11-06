@@ -70,6 +70,7 @@ test('busca, edita e suspende um cartão', async ({ page }) => {
   await expect(page.getByText('1 nota')).toBeVisible()
   await page.getByRole('link', { name: /gato/ }).click()
 
+  await expect(page.getByLabel('Verso')).toHaveValue('cat') // a nota carregou
   await page.getByLabel('Verso').fill('cat, kitty')
   await page.keyboard.press('Control+Enter')
   await expect(page.getByText('Cartão salvo.')).toBeVisible()
@@ -121,6 +122,37 @@ test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await expect(page.locator('.frente')).toHaveText('Quem foi presidente do Brasil de 2003 a 2010?')
   await page.keyboard.press('Space')
   await expect(page.locator('.verso')).toHaveText('Lula (2003–2010)')
+
+  // Depois de aprovado, o pedido ainda pode ser editado e refeito: o cartão de mesma frente é
+  // atualizado, e o que não existia entra.
+  await page.keyboard.press('Escape')
+  await page.getByRole('link', { name: '“presidentes do Brasil no século 21”' }).click()
+  await page.getByRole('button', { name: 'Editar e refazer' }).click()
+  await page.getByLabel('Pedido').fill('presidentes do Brasil no século 21, com o partido de cada um')
+  await page.getByRole('button', { name: 'Refazer com este pedido' }).click()
+  await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
+  await expect(page.locator('.pedido')).toContainText('com o partido de cada um')
+  await expect(page.getByText('Atualiza o cartão que já existe')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Adicionar 2 ao baralho' }).click()
+  await expect(page.getByText('1 nota criada, 1 atualizada.')).toBeVisible()
+})
+
+test('estuda todos os baralhos misturados pelo botão do topo', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('.estudar-tudo').click()
+  const baralhos = new Set()
+  for (let i = 0; i < 12 && !(await page.getByText('Pronto por hoje.').isVisible()); i++) {
+    await expect(page.locator('.frente')).toBeVisible()
+    await expect(page.locator('.modo')).toContainText('Todos')
+    baralhos.add((await page.locator('.barra .baralho').textContent()).replace('Todos · ', ''))
+    await page.keyboard.press('Space')
+    await page.keyboard.press('4')
+    await page.waitForTimeout(150)
+  }
+  await expect(page.getByText('Pronto por hoje.')).toBeVisible()
+  await expect(page.getByText(/revisões hoje, somando os baralhos/)).toBeVisible()
+  expect([...baralhos].sort()).toEqual(['Inglês', 'Presidentes do Brasil no século 21'])
+  await expect(page.locator('.estudar-tudo')).toHaveCount(0)
 })
 
 test('edita a instrução da IA e volta ao padrão', async ({ page }) => {

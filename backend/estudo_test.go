@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -230,5 +232,56 @@ func TestAmanhaTiraDoDiaEVoltaNoSeguinte(t *testing.T) {
 	}
 	if s := e.pedir("POST", "/api/cartoes/"+es.Cartao.ID+"/responder", map[string]any{"nota": 6, "repeticoes": es.Cartao.Repeticoes}, nil); s != http.StatusBadRequest {
 		t.Errorf("nota 6 aceita: %d", s)
+	}
+}
+
+// "Estudar" com todos os baralhos: mistura os baralhos, cada um com o próprio limite, e a resposta
+// conta no baralho do cartão. Desfazer volta a última resposta, de qualquer baralho.
+func TestEstudarTodosOsBaralhos(t *testing.T) {
+	e := novoAmbiente(t)
+	ingles := e.criarBaralho("Inglês")
+	brasil := e.criarBaralho("Brasil")
+	e.pedir("PATCH", "/api/baralhos/"+ingles.ID, map[string]int{"novos_por_dia": 3}, nil)
+	e.pedir("PATCH", "/api/baralhos/"+brasil.ID, map[string]int{"novos_por_dia": 3}, nil)
+	for i := range 5 {
+		e.criarNota(ingles.ID, "basico", fmt.Sprintf("en %d", i), "x")
+		e.criarNota(brasil.ID, "basico", fmt.Sprintf("br %d", i), "x")
+	}
+
+	var es estudo
+	e.pedir("GET", "/api/estudo", nil, &es)
+	if !es.Todos || es.Contagem.Novos != 6 {
+		t.Fatalf("início: %+v", es.Contagem)
+	}
+	vistos := map[string]int{}
+	ordem := map[string][]string{}
+	for es.Cartao != nil {
+		vistos[es.Baralho.Nome]++
+		ordem[es.Baralho.Nome] = append(ordem[es.Baralho.Nome], es.Cartao.Frente)
+		var prox estudo
+		corpo := map[string]any{"nota": 4, "repeticoes": es.Cartao.Repeticoes, "todos": true}
+		if s := e.pedir("POST", "/api/cartoes/"+es.Cartao.ID+"/responder", corpo, &prox); s != http.StatusOK {
+			t.Fatalf("responder: %d", s)
+		}
+		es = prox
+	}
+	if vistos["Inglês"] != 3 || vistos["Brasil"] != 3 || es.FeitosHoje != 6 {
+		t.Fatalf("cada baralho com o seu limite: %v, feitos %d", vistos, es.FeitosHoje)
+	}
+	// Dentro de cada baralho, a ordem dele.
+	if strings.Join(ordem["Inglês"], ",") != "en 0,en 1,en 2" {
+		t.Fatalf("ordem do inglês: %v", ordem["Inglês"])
+	}
+	if b := e.estudo(ingles.ID); b.FeitosHoje != 3 || b.Contagem.Novos != 0 {
+		t.Fatalf("as respostas deviam contar no baralho: %+v", b)
+	}
+
+	// Desfazer volta o último cartão respondido, seja de qual baralho for.
+	var desfeito estudo
+	if s := e.pedir("POST", "/api/estudo/desfazer", nil, &desfeito); s != http.StatusOK {
+		t.Fatalf("desfazer: %d", s)
+	}
+	if !desfeito.Todos || desfeito.Cartao == nil || desfeito.FeitosHoje != 5 {
+		t.Fatalf("desfeito: %+v", desfeito)
 	}
 }

@@ -65,7 +65,12 @@ type cartaoProposto struct {
 	Imagem    string `json:"imagem"`
 	ImagemURL string `json:"imagem_url"`
 	// AudioURL: a pronúncia da frente, quando a página de um link traz (baixada ao aprovar).
+	// As duas também podem apontar para um arquivo que o app já tem (/api/imagens/…, /api/audios/…):
+	// é o caso de um cartão que já existe e vai ser atualizado.
 	AudioURL string `json:"audio_url"`
+	// Atualiza: o baralho já tem um cartão com esta frente; aprovar muda o verso dele (e o resto)
+	// sem perder o histórico de estudo.
+	Atualiza bool `json:"atualiza"`
 }
 
 const esquemaProposta = `{
@@ -221,8 +226,14 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 			return nil, fmt.Errorf("o baralho de destino não existe mais")
 		}
 		destino = fmt.Sprintf("Os cartões vão para o baralho que já existe %q (devolva esse mesmo nome em nome_baralho).", b.Nome)
-		if frentes := a.frentes(ctx, b.ID); len(frentes) > 0 {
-			destino += " Ele já tem estes cartões; não repita nenhum:\n- " + strings.Join(frentes, "\n- ")
+		if existentes := a.notasDoBaralho(ctx, b.ID); len(existentes) > 0 {
+			var lista []string
+			for _, n := range existentes {
+				lista = append(lista, fmt.Sprintf("%s → %s", linhaUnica(n.Frente), cortar(linhaUnica(n.Verso), 300)))
+			}
+			destino += " Ele já tem estes cartões (frente → verso). Não crie cartões repetidos. Se o pedido for para mudar ou " +
+				"completar cartões que já existem, devolva-os com a frente exatamente igual à de lá: o cartão é atualizado, " +
+				"sem perder o histórico de estudo.\n- " + strings.Join(lista, "\n- ")
 		}
 	}
 
@@ -254,9 +265,28 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		return nil, errors.New("a IA não devolveu nenhum cartão")
 	}
 
+	// Cartão que já existe no baralho: é uma atualização, e a foto e o áudio que ele tem ficam.
+	if g.BaralhoID != "" {
+		existentes := map[string]nota{}
+		for _, n := range a.notasDoBaralho(ctx, g.BaralhoID) {
+			existentes[n.Frente] = n
+		}
+		for i, c := range p.Cartoes {
+			if n, ok := existentes[c.Frente]; ok {
+				p.Cartoes[i].Atualiza = true
+				if n.Imagem != "" {
+					p.Cartoes[i].ImagemURL = "/api/imagens/" + n.Imagem
+				}
+				if n.Audio != "" {
+					p.Cartoes[i].AudioURL = "/api/audios/" + n.Audio
+				}
+			}
+		}
+	}
+
 	// As fotos vêm da Wikipédia pelo título que a IA indicou; sem foto, o cartão segue sem imagem.
 	for i, c := range p.Cartoes {
-		if c.Imagem == "" || ctx.Err() != nil {
+		if c.Imagem == "" || c.ImagemURL != "" || ctx.Err() != nil {
 			continue
 		}
 		if achadas, err := a.buscarImagens(ctx, c.Imagem, 1); err == nil && len(achadas) > 0 {
@@ -264,6 +294,18 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		}
 	}
 	return &p, nil
+}
+
+func (a *app) notasDoBaralho(ctx context.Context, baralhoID string) []nota {
+	lista, err := a.notas(ctx, `WHERE baralho_id = ? ORDER BY criada_em LIMIT 500`, baralhoID)
+	if err != nil {
+		return nil
+	}
+	return lista
+}
+
+func linhaUnica(s string) string {
+	return strings.ReplaceAll(strings.TrimSpace(s), "\n", " ")
 }
 
 func (a *app) frentes(ctx context.Context, baralhoID string) []string {
@@ -324,10 +366,16 @@ func (a *app) handlePedirGeracao(w http.ResponseWriter, r *http.Request) {
 
 // handleGeracoes lista as que ainda pedem atenção (na fila, rodando, para revisar, com erro) e as
 // últimas terminadas.
+// Com ?baralho=, os pedidos à IA que criaram ou alimentaram aquele baralho.
 func (a *app) handleGeracoes(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.QueryContext(r.Context(), `SELECT `+colunasGeracao+` FROM geracoes
+	consulta, args := `SELECT `+colunasGeracao+` FROM geracoes
 		WHERE estado IN (?, ?, ?, ?) OR id IN (SELECT id FROM geracoes ORDER BY id DESC LIMIT 10) ORDER BY id DESC`,
-		naFila, rodando, emRevisao, falhou)
+		[]any{naFila, rodando, emRevisao, falhou}
+	if b := r.URL.Query().Get("baralho"); b != "" {
+		consulta, args = `SELECT `+colunasGeracao+` FROM geracoes
+			WHERE origem = 'ia' AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
+	}
+	rows, err := a.db.QueryContext(r.Context(), consulta, args...)
 	if err != nil {
 		falha(w, err)
 		return
@@ -375,8 +423,12 @@ func (a *app) responderGeracao(w http.ResponseWriter, r *http.Request, status in
 	writeJSON(w, status, g)
 }
 
-// handleAcaoGeracao: cancelar (na fila ou rodando), refazer (depois de falhar ou ser descartada)
-// e descartar (a proposta).
+// handleAcaoGeracao: cancelar (na fila ou rodando), refazer e descartar (a proposta).
+//
+// Refazer volta o pedido para a fila, com o texto (e a quantidade) editados quando vierem no corpo;
+// vale depois de terminar de qualquer jeito, inclusive com a proposta ainda em revisão (ela é
+// trocada pela nova) ou já aprovada: aí a IA trabalha no baralho que foi criado, e os cartões que
+// ela devolver com a mesma frente atualizam os que já existem. Não guarda histórico do pedido.
 func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 	id, ok := idDaGeracao(w, r)
 	if !ok {
@@ -397,8 +449,27 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 		a.fila.mu.Unlock()
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, terminado_em = ? WHERE id = ? AND estado = ?`, cancelada, a.agora(), id, naFila)
 	case "refazer":
-		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '' WHERE id = ? AND origem = 'ia' AND estado IN (?, ?, ?)`,
-			naFila, id, falhou, cancelada, rejeitada)
+		var corpo struct {
+			Pedido     string `json:"pedido"`
+			Quantidade int    `json:"quantidade"`
+		}
+		if r.ContentLength != 0 && !lerCorpo(w, r, &corpo) {
+			return
+		}
+		corpo.Pedido = strings.TrimSpace(corpo.Pedido)
+		if corpo.Quantidade != 0 && (corpo.Quantidade < 1 || corpo.Quantidade > 100) {
+			erroJSON(w, http.StatusBadRequest, "Peça de 1 a 100 cartões.")
+			return
+		}
+		// Um pedido aprovado num baralho novo passa a mirar esse baralho (se ele ainda existir).
+		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '',
+				pedido = CASE WHEN ? = '' THEN pedido ELSE ? END,
+				quantidade = CASE WHEN ? = 0 THEN quantidade ELSE ? END,
+				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
+				resultado = ''
+			WHERE id = ? AND origem = 'ia' AND estado IN (?, ?, ?, ?, ?)`,
+			naFila, corpo.Pedido, corpo.Pedido, corpo.Quantidade, corpo.Quantidade, concluida,
+			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()
 	case "descartar":
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, terminado_em = ? WHERE id = ? AND estado = ?`, rejeitada, a.agora(), id, emRevisao)
@@ -462,13 +533,17 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 
 	semImagem, semAudio := 0, 0
 	for i, c := range corpo.Cartoes {
-		if c.ImagemURL != "" {
+		if nome, ok := strings.CutPrefix(c.ImagemURL, "/api/imagens/"); ok && nomeDeImagem.MatchString(nome) {
+			notas[i].Imagem = nome
+		} else if c.ImagemURL != "" {
 			if notas[i].Imagem, err = a.baixarImagem(ctx, c.ImagemURL); err != nil {
 				log.Printf("geração %d: imagem %s: %v", id, c.ImagemURL, err)
 				semImagem++
 			}
 		}
-		if c.AudioURL != "" {
+		if nome, ok := strings.CutPrefix(c.AudioURL, "/api/audios/"); ok && nomeDeAudio.MatchString(nome) {
+			notas[i].Audio = nome
+		} else if c.AudioURL != "" {
 			if notas[i].Audio, err = a.baixarAudio(ctx, c.AudioURL); err != nil {
 				log.Printf("geração %d: áudio %s: %v", id, c.AudioURL, err)
 				semAudio++
@@ -490,9 +565,28 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	criadas, atualizadas := 0, 0
 	for _, d := range notas {
 		d.BaralhoID = baralhoID
-		if _, err := a.criarNota(ctx, tx, d); err != nil {
+		// A mesma frente no baralho: atualiza a nota, e os cartões dela seguem com o histórico.
+		var existente, tipo string
+		err := tx.QueryRowContext(ctx, `SELECT id, tipo FROM notas WHERE baralho_id = ? AND frente = ? LIMIT 1`, baralhoID, d.Frente).Scan(&existente, &tipo)
+		switch {
+		case err == nil:
+			if tiposDeNota[d.Tipo] < tiposDeNota[tipo] {
+				d.Tipo = tipo // atualizar não apaga o cartão do verso
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE notas SET tipo = ?, verso = ?, tags = ?, imagem = ?, audio = ?, atualizada_em = ? WHERE id = ?`,
+				d.Tipo, d.Verso, d.Tags, d.Imagem, d.Audio, a.agora(), existente)
+			if err == nil {
+				err = criarCartoes(ctx, tx, existente, baralhoID, d.Tipo, a.agora())
+			}
+			atualizadas++
+		case errors.Is(err, sql.ErrNoRows):
+			_, err = a.criarNota(ctx, tx, d)
+			criadas++
+		}
+		if err != nil {
 			falha(w, err)
 			return
 		}
@@ -511,7 +605,7 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		falha(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"baralho_id": baralhoID, "criadas": len(notas), "sem_imagem": semImagem, "sem_audio": semAudio})
+	writeJSON(w, http.StatusOK, map[string]any{"baralho_id": baralhoID, "criadas": criadas, "atualizadas": atualizadas, "sem_imagem": semImagem, "sem_audio": semAudio})
 }
 
 func cortar(s string, n int) string {

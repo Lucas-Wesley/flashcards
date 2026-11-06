@@ -5,6 +5,8 @@ import { api } from './api.js'
 
 // Um pedido à IA ou um link: enquanto a IA trabalha, o andamento; depois, a proposta para revisar.
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
+// O pedido à IA pode ser editado e refeito depois de terminar, mesmo aprovado: aí a IA trabalha no
+// baralho criado, e os cartões que voltarem com a mesma frente atualizam os que já existem.
 const props = defineProps({ id: { type: String, required: true } })
 const recado = inject('recado')
 
@@ -15,6 +17,9 @@ const cartoes = ref([]) // cópia editável da proposta, com "incluir"
 const buscandoEm = ref(-1) // índice do cartão com a busca de imagem aberta
 const nomeDoDestino = ref('')
 const enviando = ref(false)
+const editando = ref(false)
+const novoPedido = ref('')
+const novaQuantidade = ref(20)
 let relogio
 
 const NOMES = {
@@ -30,6 +35,8 @@ const NOMES = {
 const doLink = computed(() => g.value?.origem === 'link')
 const trabalhando = computed(() => ['na_fila', 'rodando'].includes(g.value?.estado))
 const escolhidos = computed(() => cartoes.value.filter((c) => c.incluir))
+const atualizacoes = computed(() => escolhidos.value.filter((c) => c.atualiza).length)
+const podeRefazer = computed(() => g.value && !doLink.value && !trabalhando.value)
 
 async function carregar() {
   try {
@@ -70,8 +77,37 @@ async function aprovar() {
       r.sem_imagem && (r.sem_imagem === 1 ? '1 imagem não veio' : `${r.sem_imagem} imagens não vieram`),
       r.sem_audio && (r.sem_audio === 1 ? '1 áudio não veio' : `${r.sem_audio} áudios não vieram`),
     ].filter(Boolean)
-    recado(`${r.criadas === 1 ? '1 nota criada' : `${r.criadas} notas criadas`}${faltas.length ? `; ${faltas.join(', ')}` : ''}.`)
+    const feitas = [
+      (r.criadas || !r.atualizadas) && (r.criadas === 1 ? '1 nota criada' : `${r.criadas} notas criadas`),
+      r.atualizadas && (r.atualizadas === 1 ? '1 atualizada' : `${r.atualizadas} atualizadas`),
+    ].filter(Boolean)
+    recado(`${feitas.join(', ')}${faltas.length ? `; ${faltas.join(', ')}` : ''}.`)
     location.hash = `#/baralho/${r.baralho_id}`
+  } catch (e) {
+    recado(e.message, true)
+  } finally {
+    enviando.value = false
+  }
+}
+
+function editar() {
+  novoPedido.value = g.value.pedido
+  novaQuantidade.value = g.value.quantidade
+  editando.value = true
+}
+
+async function refazer() {
+  if (!novoPedido.value.trim()) return
+  if (g.value.estado === 'em_revisao' && !confirm('Refazer troca a proposta atual pela nova. Continuar?')) return
+  enviando.value = true
+  try {
+    g.value = await api(`/api/geracoes/${props.id}/refazer`, {
+      metodo: 'POST',
+      corpo: { pedido: novoPedido.value, quantidade: Number(novaQuantidade.value) },
+    })
+    editando.value = false
+    cartoes.value = []
+    carregar()
   } catch (e) {
     recado(e.message, true)
   } finally {
@@ -98,7 +134,32 @@ onBeforeUnmount(() => clearTimeout(relogio))
     <template v-if="g">
       <h1>{{ doLink ? 'Cartões do link' : 'Gerar com IA' }}</h1>
       <p v-if="doLink" class="pedido link"><a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a></p>
-      <p v-else class="pedido">“{{ g.pedido }}”</p>
+      <form v-else-if="editando" class="edicao" @submit.prevent="refazer">
+        <textarea
+          v-model="novoPedido"
+          class="campo"
+          rows="4"
+          aria-label="Pedido"
+          @keydown.ctrl.enter="refazer"
+          @keydown.meta.enter="refazer"
+        />
+        <label class="quantos">
+          <span class="rotulo-campo">Quantos cartões, mais ou menos</span>
+          <input v-model="novaQuantidade" class="campo" type="number" min="1" max="100" aria-label="Quantidade" />
+        </label>
+        <p v-if="g.estado === 'concluida'" class="suave dica">
+          A IA trabalha no baralho que já foi criado. Os cartões que ela devolver com a mesma frente atualizam os que existem, sem perder o
+          histórico de estudo; você revisa antes, como da primeira vez.
+        </p>
+        <div class="linha-acoes">
+          <button class="botao principal" :disabled="enviando || !novoPedido.trim()">{{ enviando ? 'Enviando…' : 'Refazer com este pedido' }}</button>
+          <button type="button" class="botao" @click="editando = false">Cancelar</button>
+        </div>
+      </form>
+      <p v-else class="pedido">
+        “{{ g.pedido }}”
+        <button v-if="podeRefazer" type="button" class="botao editar" @click="editar">Editar e refazer</button>
+      </p>
       <p class="meta">
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
@@ -132,13 +193,18 @@ onBeforeUnmount(() => clearTimeout(relogio))
           <span class="rotulo-campo">Nome do baralho novo</span>
           <input v-model="nome" class="campo" aria-label="Nome do baralho novo" />
         </label>
-        <p v-else class="suave">Os cartões vão para <strong>{{ nomeDoDestino }}</strong>.</p>
+        <p v-else class="suave">
+          Os cartões vão para <strong>{{ nomeDoDestino }}</strong>.<template v-if="atualizacoes">
+            {{ atualizacoes === 1 ? '1 já existe e vai ser atualizado' : `${atualizacoes} já existem e vão ser atualizados` }}, sem perder o histórico.</template
+          >
+        </p>
 
         <p class="rotulo">{{ cartoes.length }} cartões propostos · {{ escolhidos.length }} marcados</p>
         <ul class="lista">
           <li v-for="(c, i) in cartoes" :key="i" class="proposto" :class="{ fora: !c.incluir }">
             <input v-model="c.incluir" type="checkbox" class="marcar" :aria-label="`Incluir o cartão ${i + 1}`" />
             <div class="campos">
+              <span v-if="c.atualiza" class="chip atualiza">Atualiza o cartão que já existe</span>
               <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
               <textarea v-model="c.verso" class="campo texto-cartao" rows="2" :aria-label="`Verso do cartão ${i + 1}`" />
               <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />
@@ -166,7 +232,9 @@ onBeforeUnmount(() => clearTimeout(relogio))
               enviando
                 ? 'Criando…'
                 : g.baralho_id
-                  ? `Adicionar ${escolhidos.length} ao baralho`
+                  ? atualizacoes === escolhidos.length
+                    ? `Atualizar ${escolhidos.length} no baralho`
+                    : `Adicionar ${escolhidos.length} ao baralho`
                   : `Criar baralho com ${escolhidos.length} ${escolhidos.length === 1 ? 'cartão' : 'cartões'}`
             }}
           </button>
@@ -195,6 +263,44 @@ onBeforeUnmount(() => clearTimeout(relogio))
   font-family: var(--leitura);
   font-size: 1.1rem;
   line-height: 1.5;
+}
+
+.editar {
+  min-height: 30px;
+  margin-left: 6px;
+  padding: 2px 10px;
+  font-family: var(--interface);
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+
+.edicao {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.edicao textarea {
+  font-family: var(--leitura);
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.quantos {
+  display: grid;
+  gap: 6px;
+  max-width: 260px;
+}
+
+.dica {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.atualiza {
+  justify-self: start;
 }
 
 .meta {

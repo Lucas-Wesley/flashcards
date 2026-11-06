@@ -54,6 +54,8 @@ async function criar() {
 }
 
 const total = (b) => b.contagem.novos + b.contagem.aprendendo + b.contagem.revisar
+// O "Estudar" do topo junta todos os baralhos numa fila só.
+const totalGeral = computed(() => (baralhos.value || []).reduce((soma, b) => soma + total(b), 0))
 
 onMounted(() => {
   carregar()
@@ -64,7 +66,12 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
 <template>
   <div class="pagina">
-    <h1>Baralhos</h1>
+    <div class="topo">
+      <h1>Baralhos</h1>
+      <a v-if="totalGeral" class="botao principal estudar-tudo" href="#/estudar" title="Todos os baralhos, misturados"
+        >Estudar <span class="total">{{ totalGeral }}</span></a
+      >
+    </div>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
@@ -117,6 +124,23 @@ onBeforeUnmount(() => clearTimeout(relogio))
 </template>
 
 <style scoped>
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.topo h1 {
+  margin-bottom: 0;
+}
+
+.estudar-tudo .total {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
 .lista li {
   display: flex;
   align-items: center;
