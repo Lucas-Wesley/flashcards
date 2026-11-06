@@ -115,6 +115,7 @@ type cartaoDeEstudo struct {
 	Frente  string `json:"frente"`
 	Verso   string `json:"verso"`
 	Tags    string `json:"tags"`
+	Imagem  string `json:"imagem"`
 	Sentido int    `json:"sentido"`
 	Estado  int    `json:"estado"`
 	// Repeticoes vai e volta na resposta: um toque duplo não responde o mesmo cartão duas vezes.
@@ -155,14 +156,14 @@ func (a *app) montarEstudo(ctx context.Context, b baralho, forcar *cartao) (estu
 		e.EsperaAte = espera.String
 		return e, nil
 	}
-	var frente, verso, tags string
-	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags); err != nil {
+	var frente, verso, tags, imagem string
+	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem); err != nil {
 		return e, err
 	}
 	if c.Sentido == 1 {
 		frente, verso = verso, frente
 	}
-	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
+	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
 	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, f.agora)
 	return e, err
 }

@@ -31,6 +31,22 @@ func newServer(a *app, web fs.FS, version string) http.Handler {
 	mux.HandleFunc("POST /api/cartoes/{id}/responder", a.handleResponder)
 	mux.HandleFunc("PATCH /api/cartoes/{id}", a.handleMudarCartao)
 
+	mux.HandleFunc("GET /api/geracoes", a.handleGeracoes)
+	mux.HandleFunc("POST /api/geracoes", a.handlePedirGeracao)
+	mux.HandleFunc("GET /api/geracoes/{id}", a.handleGeracao)
+	mux.HandleFunc("POST /api/geracoes/{id}/aprovar", a.handleAprovar)
+	mux.HandleFunc("POST /api/geracoes/{id}/{acao}", a.handleAcaoGeracao)
+
+	mux.HandleFunc("GET /api/imagens", a.handleBuscarImagens)
+	mux.HandleFunc("POST /api/imagens/baixar", a.handleBaixarImagem)
+	mux.HandleFunc("POST /api/imagens", a.handleEnviarImagem)
+	mux.HandleFunc("GET /api/imagens/{nome}", a.handleImagem)
+
+	mux.HandleFunc("GET /api/instrucoes", a.handleInstrucoes)
+	mux.HandleFunc("GET /api/instrucoes/{arquivo}", a.handleInstrucao)
+	mux.HandleFunc("PUT /api/instrucoes/{arquivo}", a.handleSalvarInstrucao)
+	mux.HandleFunc("DELETE /api/instrucoes/{arquivo}", a.handleRestaurarInstrucao)
+
 	mux.HandleFunc("GET /api/sugestoes", a.handleSugestoes)
 	mux.HandleFunc("PUT /api/sugestoes/{id}", a.handleGuardarSugestao)
 	mux.HandleFunc("PATCH /api/sugestoes/{id}", a.handleMarcarSugestao)

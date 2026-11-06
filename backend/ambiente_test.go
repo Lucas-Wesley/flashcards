@@ -2,10 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -15,9 +20,15 @@ import (
 type ambiente struct {
 	t     *testing.T
 	srv   *httptest.Server
+	wiki  *httptest.Server
+	app   *app
+	dados string
 	agora time.Time
 	fuso  *time.Location
 }
+
+// Um PNG de 1×1 pixel.
+var pngDeTeste, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 
 func novoAmbiente(t *testing.T) *ambiente {
 	t.Helper()
@@ -31,9 +42,38 @@ func novoAmbiente(t *testing.T) *ambiente {
 		t.Fatal(err)
 	}
 	e := &ambiente{t: t, fuso: fuso, agora: time.Date(2026, 11, 6, 10, 0, 0, 0, fuso)}
-	a := novoApp(db, novoRelogio(fuso, func() time.Time { return e.agora }))
+
+	// Wikipédia falsa: a busca acha o artigo do Lula com foto; a foto é um PNG de verdade.
+	e.wiki = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/foto.png" {
+			w.Write(pngDeTeste)
+			return
+		}
+		if strings.Contains(r.URL.Query().Get("gsrsearch"), "Lula") {
+			fmt.Fprintf(w, `{"query":{"pages":[{"title":"Lula (molusco)","index":2},{"title":"Luiz Inácio Lula da Silva","index":1,"thumbnail":{"source":"%s/foto.png"}}]}}`, e.wiki.URL)
+			return
+		}
+		w.Write([]byte(`{"batchcomplete":true}`))
+	}))
+	t.Cleanup(e.wiki.Close)
+	wikiURL, _ := url.Parse(e.wiki.URL)
+
+	dados := t.TempDir()
+	e.dados = dados
+	cfg := config{dados: dados, regras: absoluto("../regras"), claude: absoluto("testdata/claude-falso"),
+		wiki: e.wiki.URL + "/w/api.php", hostsDeImagem: []string{wikiURL.Host}}
+	a, err := novoApp(db, novoRelogio(fuso, func() time.Time { return e.agora }), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.app = a
+	ctx, parar := context.WithCancel(context.Background())
+	go a.fila.rodar(ctx)
 	e.srv = httptest.NewServer(newServer(a, fstest.MapFS{"index.html": {Data: []byte("<div id=\"app\"></div>")}}, "teste"))
-	t.Cleanup(e.srv.Close)
+	t.Cleanup(func() {
+		e.srv.Close()
+		parar()
+	})
 	return e
 }
 
@@ -111,4 +151,8 @@ func (e *ambiente) nota(id string) nota {
 		e.t.Fatalf("nota: %d", s)
 	}
 	return n
+}
+
+func jsonDecode(res *http.Response, destino any) {
+	json.NewDecoder(res.Body).Decode(destino)
 }

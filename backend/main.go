@@ -41,15 +41,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	a := novoApp(db, novoRelogio(fuso, time.Now))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	a, err := novoApp(db, novoRelogio(fuso, time.Now), configDoAmbiente(dataDir))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := a.fila.recuperar(ctx); err != nil {
+		log.Fatal(err)
+	}
+	go a.fila.rodar(ctx)
 
 	web, err := fs.Sub(webDist, "web/dist")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -88,7 +95,30 @@ func abrirBanco(caminho string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := migrar(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return db, nil
+}
+
+// migrar acrescenta as colunas que vieram depois da primeira versão a um banco que já existe.
+func migrar(db *sql.DB) error {
+	colunas := map[string]bool{}
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('notas')`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var nome string
+		rows.Scan(&nome)
+		colunas[nome] = true
+	}
+	rows.Close()
+	if !colunas["imagem"] {
+		_, err = db.Exec(`ALTER TABLE notas ADD COLUMN imagem TEXT NOT NULL DEFAULT ''`)
+	}
+	return err
 }
 
 // Horários em RFC 3339, UTC e sem fração de segundo: assim a ordem do texto é a ordem do tempo.
@@ -109,6 +139,7 @@ CREATE TABLE IF NOT EXISTS notas (
 	frente        TEXT NOT NULL,
 	verso         TEXT NOT NULL,
 	tags          TEXT NOT NULL DEFAULT '',
+	imagem        TEXT NOT NULL DEFAULT '', -- arquivo em DATA_DIR/media; aparece junto do verso
 	criada_em     TEXT NOT NULL,
 	atualizada_em TEXT NOT NULL
 );
@@ -143,6 +174,21 @@ CREATE TABLE IF NOT EXISTS revisoes (
 	antes        TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS revisoes_dia ON revisoes (baralho_id, revisado_em);
+-- Pedidos de baralho à IA: entram na fila, viram uma proposta e esperam a revisão do Lucas.
+CREATE TABLE IF NOT EXISTS geracoes (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	pedido       TEXT NOT NULL,
+	quantidade   INTEGER NOT NULL,
+	tipo         TEXT NOT NULL,
+	baralho_id   TEXT NOT NULL DEFAULT '', -- vazio = baralho novo
+	estado       TEXT NOT NULL,
+	erro         TEXT NOT NULL DEFAULT '',
+	proposta     TEXT NOT NULL DEFAULT '',
+	resultado    TEXT NOT NULL DEFAULT '', -- id do baralho que recebeu os cartões
+	criado_em    TEXT NOT NULL,
+	iniciado_em  TEXT NOT NULL DEFAULT '',
+	terminado_em TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS sugestoes (
 	id            TEXT PRIMARY KEY,
 	texto         TEXT NOT NULL,

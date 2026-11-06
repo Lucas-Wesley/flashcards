@@ -1,5 +1,5 @@
 <script setup>
-import { inject, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from './api.js'
 
 const recado = inject('recado')
@@ -7,6 +7,27 @@ const baralhos = ref(null)
 const erro = ref('')
 const nome = ref('')
 const criando = ref(false)
+const geracoes = ref([])
+let relogio
+
+// Pedidos à IA que ainda pedem atenção: na fila, rodando, para revisar ou com erro.
+const ESTADOS = { na_fila: 'Na fila', rodando: 'Montando…', em_revisao: 'Para revisar', falhou: 'Falhou' }
+const pedidos = computed(() => geracoes.value.filter((g) => ESTADOS[g.estado]))
+
+async function carregarGeracoes() {
+  try {
+    geracoes.value = await api('/api/geracoes')
+  } catch {
+    // Sem rede, a seção some; os baralhos já mostram o aviso.
+  }
+  clearTimeout(relogio)
+  if (geracoes.value.some((g) => g.estado === 'na_fila' || g.estado === 'rodando')) {
+    relogio = setTimeout(() => {
+      carregarGeracoes()
+      carregar()
+    }, 4000)
+  }
+}
 
 async function carregar() {
   try {
@@ -34,7 +55,11 @@ async function criar() {
 
 const total = (b) => b.contagem.novos + b.contagem.aprendendo + b.contagem.revisar
 
-onMounted(carregar)
+onMounted(() => {
+  carregar()
+  carregarGeracoes()
+})
+onBeforeUnmount(() => clearTimeout(relogio))
 </script>
 
 <template>
@@ -42,6 +67,19 @@ onMounted(carregar)
     <h1>Baralhos</h1>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
+
+    <template v-if="pedidos.length">
+      <p class="rotulo primeiro">Pedidos à IA</p>
+      <ul class="lista pedidos">
+        <li v-for="g in pedidos" :key="g.id">
+          <a class="pedido" :href="`#/geracao/${g.id}`">
+            <span class="texto-pedido">{{ g.pedido }}</span>
+            <span class="chip" :class="{ andando: g.estado !== 'falhou', erro: g.estado === 'falhou' }">{{ ESTADOS[g.estado] }}</span>
+          </a>
+        </li>
+      </ul>
+      <p class="rotulo">Seus baralhos</p>
+    </template>
 
     <template v-if="baralhos">
       <ul v-if="baralhos.length" class="lista">
@@ -71,8 +109,9 @@ onMounted(carregar)
       <p class="rotulo">Novo baralho</p>
       <form class="novo" @submit.prevent="criar">
         <input v-model="nome" class="campo" placeholder="Nome do baralho" aria-label="Nome do novo baralho" />
-        <button class="botao" :disabled="criando || !nome.trim()">Criar</button>
+        <button class="botao" :disabled="criando || !nome.trim()">Criar vazio</button>
       </form>
+      <p class="gerar">ou <a href="#/gerar">peça à IA um baralho pronto</a> sobre um assunto, para revisar antes de estudar.</p>
     </template>
   </div>
 </template>
@@ -163,6 +202,40 @@ onMounted(carregar)
 .legenda .numero {
   font-size: inherit;
   font-weight: 500;
+}
+
+.rotulo.primeiro {
+  margin-top: 0;
+}
+
+.pedidos {
+  margin-bottom: 8px;
+}
+
+.pedido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.texto-pedido {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pedido:hover .texto-pedido {
+  color: var(--azul);
+}
+
+.gerar {
+  margin: 10px 0 0;
+  color: var(--texto-suave);
+  font-size: 0.85rem;
 }
 
 .novo {

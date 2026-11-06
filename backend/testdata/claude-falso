@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# claude falso para os testes: devolve uma proposta fixa e conta o que recebeu.
+prompt=""
+ferramentas=""
+proibidas=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p) prompt="$2"; shift 2 ;;
+    --allowedTools) ferramentas="$2"; shift 2 ;;
+    --disallowedTools) proibidas="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ -n "$CLAUDE_FALSO_FALHA" ] && { printf '{"result":"limite de uso atingido","is_error":true}\n'; exit 1; }
+sleep "${CLAUDE_FALSO_ESPERA:-0}"
+obs="Ferramentas: $ferramentas; proibidas: $proibidas."
+case "$prompt" in *"REGRA EDITADA"*) obs="$obs Seguiu a instrução editada." ;; esac
+case "$prompt" in *"não repita nenhum"*) obs="$obs Recebeu os cartões existentes." ;; esac
+printf '{"type":"result","result":"","is_error":false,"structured_output":{"nome_baralho":"Presidentes do Brasil no século 21","observacoes":"%s","cartoes":[{"frente":"Quem foi presidente do Brasil de 2003 a 2010?","verso":"Luiz Inácio Lula da Silva","tags":"presidentes","imagem":"Luiz Inácio Lula da Silva"},{"frente":"Quem sucedeu Lula em 2011?","verso":"Dilma Rousseff","tags":"presidentes","imagem":""},{"frente":"  ","verso":"cartão vazio, deve sumir","tags":"","imagem":""}]}}\n' "$obs"

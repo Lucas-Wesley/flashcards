@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject, nextTick, onMounted, ref } from 'vue'
+import BuscaDeImagem from './BuscaDeImagem.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, api, lembrar } from './api.js'
 import { vencimento } from './tempo.js'
 
@@ -13,10 +14,12 @@ const recado = inject('recado')
 
 const baralhos = ref([])
 const nota = ref(null)
-const dados = ref({ baralho_id: '', tipo: 'basico', frente: '', verso: '', tags: '' })
+const dados = ref({ baralho_id: '', tipo: 'basico', frente: '', verso: '', tags: '', imagem: '' })
 const erro = ref('')
 const salvando = ref(false)
 const campoFrente = ref(null)
+const buscandoImagem = ref(false)
+const trazendoImagem = ref(false)
 
 const TIPOS = [
   { valor: 'basico', nome: 'Frente e verso' },
@@ -38,8 +41,8 @@ async function carregar() {
     baralhos.value = await api('/api/baralhos')
     if (editando.value) {
       nota.value = await api(`/api/notas/${props.id}`)
-      const { baralho_id, tipo, frente, verso, tags } = nota.value
-      dados.value = { baralho_id, tipo, frente, verso, tags }
+      const { baralho_id, tipo, frente, verso, tags, imagem } = nota.value
+      dados.value = { baralho_id, tipo, frente, verso, tags, imagem }
     } else {
       const ultimo = props.baralho || lembrar('baralho')
       dados.value.baralho_id = baralhos.value.some((b) => b.id === ultimo) ? ultimo : baralhos.value[0]?.id || ''
@@ -66,12 +69,46 @@ async function salvar() {
       recado(n.cartoes.length === 2 ? 'Adicionado: dois cartões, um em cada sentido.' : 'Cartão adicionado.')
       dados.value.frente = ''
       dados.value.verso = ''
+      dados.value.imagem = ''
+      buscandoImagem.value = false
       campoFrente.value?.focus()
     }
   } catch (e) {
     recado(e.message, true)
   } finally {
     salvando.value = false
+  }
+}
+
+// A imagem escolhida vem para o servidor na hora; a nota guarda só o nome do arquivo.
+async function escolherImagem(achada) {
+  trazendoImagem.value = true
+  try {
+    dados.value.imagem = (await api('/api/imagens/baixar', { metodo: 'POST', corpo: { url: achada.url }, tempo: 30000 })).nome
+    buscandoImagem.value = false
+  } catch (e) {
+    recado(e.message, true)
+  } finally {
+    trazendoImagem.value = false
+  }
+}
+
+async function enviarImagem(ev) {
+  const arquivo = ev.target.files[0]
+  ev.target.value = ''
+  if (!arquivo) return
+  trazendoImagem.value = true
+  const corpo = new FormData()
+  corpo.append('arquivo', arquivo)
+  try {
+    const resposta = await fetch('/api/imagens', { method: 'POST', body: corpo })
+    const r = await resposta.json()
+    if (!resposta.ok) throw new Error(r.erro || `Erro ${resposta.status}`)
+    dados.value.imagem = r.nome
+  } catch (e) {
+    recado(e.message === 'Failed to fetch' ? 'Sem conexão com o servidor.' : e.message, true)
+  } finally {
+    trazendoImagem.value = false
   }
 }
 
@@ -155,6 +192,22 @@ onMounted(carregar)
         <span class="rotulo-campo">Verso</span>
         <textarea v-model="dados.verso" class="campo texto-cartao" rows="3" aria-label="Verso" />
       </label>
+      <div class="imagem">
+        <span class="rotulo-campo">Imagem <span class="suave">· aparece com o verso</span></span>
+        <div v-if="dados.imagem" class="com-imagem">
+          <img :src="`/api/imagens/${dados.imagem}`" alt="Imagem do cartão" />
+          <button type="button" class="botao" @click="dados.imagem = ''">Remover imagem</button>
+        </div>
+        <div v-else-if="!buscandoImagem" class="linha-acoes">
+          <button type="button" class="botao" :disabled="trazendoImagem" @click="buscandoImagem = true">Buscar na Wikipédia</button>
+          <label class="botao">
+            Enviar do aparelho
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden @change="enviarImagem" />
+          </label>
+          <span v-if="trazendoImagem" class="suave">Trazendo a imagem…</span>
+        </div>
+        <BuscaDeImagem v-if="buscandoImagem && !dados.imagem" :termo="dados.verso.split('\n')[0]" @escolher="escolherImagem" @fechar="buscandoImagem = false" />
+      </div>
       <label>
         <span class="rotulo-campo">Tags</span>
         <input v-model="dados.tags" class="campo" placeholder="separadas por espaço" aria-label="Tags" />
@@ -190,7 +243,7 @@ onMounted(carregar)
   gap: 16px;
 }
 
-.formulario label,
+.formulario > label,
 .tipo {
   display: grid;
   gap: 6px;
@@ -214,6 +267,24 @@ onMounted(carregar)
   font-size: 1.05rem;
   line-height: 1.5;
   resize: vertical;
+}
+
+.imagem {
+  display: grid;
+  gap: 6px;
+}
+
+.com-imagem {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.com-imagem img {
+  max-width: 160px;
+  max-height: 160px;
+  border-radius: var(--raio-p);
+  object-fit: cover;
 }
 
 select.campo {

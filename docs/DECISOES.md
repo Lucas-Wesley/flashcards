@@ -17,11 +17,14 @@
   atalhos de teclado e **desfazer**.
 - Lista de cartões com busca e filtro por baralho; edição, suspensão e exclusão.
 - Importação de texto ou CSV (`frente;verso;tags`, tabulação ou vírgula).
+- **Gerar baralho com IA**: um pedido ("presidentes do Brasil no século 21") vira uma proposta de cartões, que o Lucas
+  edita, filtra e aprova. As instruções da IA ficam em Ajustes, editáveis.
+- **Imagens** nos cartões: buscadas na Wikipédia (pela IA, ao gerar, ou à mão, no editor) ou enviadas do aparelho.
 - Ajustes com **Sugestões de melhoria** (API comum do ecossistema).
 
 **Próximos passos** (ordem sugerida):
 
-1. Mídia: imagem e áudio (pronúncia) nos cartões, em arquivos no disco (`/data/media`); o banco guarda só o nome.
+1. Áudio de pronúncia nos cartões (as imagens já existem; o áudio segue o mesmo caminho, em `/data/media`).
 2. Endpoint de integração para receber cartões da Biblioteca e do Acervo (quando os dois lados existirem; ver §4).
 3. Estudo fora de casa (offline): baixar a fila do dia e subir as respostas depois.
 4. Cloze (lacuna), estatísticas e otimização dos pesos do FSRS com o histórico do Lucas.
@@ -45,6 +48,12 @@
 | F12 | Botões de resposta grandes (52 px) e teclado completo (espaço, 1–4, Z, Esc) | Exceção consciente ao "botões pequenos" do design system: a tela de estudo serve também à TV, com controle remoto. |
 | F13 | Autenticação e backup ficam para o fim, como nas outras apps | Mesmo motivo da Biblioteca (R15): só o Lucas usa a rede local. |
 | F14 | **Botão "Amanhã"** (tecla 5), ao lado de "Errei": para o FSRS é um erro (estabilidade de erro e, numa revisão, um lapso), mas sem os passos de minutos; o cartão volta em 24h, no dia de estudo seguinte. No histórico fica com a nota 5 | Pedido do Lucas em 06/11/2026: errar e rever em 10 minutos nem sempre ajuda, às vezes é melhor deixar para amanhã. Registrar como erro mantém o histórico honesto para o algoritmo e para uma futura otimização dos pesos, que deve tratar a nota 5 como 1. |
+| F15 | **Gerar baralho com IA** como no Acervo: Claude Code headless (`claude -p`) com o token da assinatura em `/opt/apps/flashcards.env`; o pedido entra numa **fila** (uma geração por vez, sobrevive a reinício, cancelável) e vira uma **proposta** que só cria cartões depois de revisada e aprovada | Pedido do Lucas em 06/11/2026. Mesmo caminho já provado no Acervo (D13, D14, D16 de lá). A IA pode errar fatos: nada entra no estudo sem passar pelo Lucas. |
+| F16 | A IA **só tem a internet** (`WebSearch`, `WebFetch`): arquivos e terminal ficam proibidos. A instrução manda pesquisar sempre e devolver dúvidas em `observacoes` | No primeiro teste real ela pulou a pesquisa ("fatos conhecidos"); o conhecimento do modelo pode estar desatualizado. Com a instrução firme, ela pesquisou e avisou do que não conseguiu confirmar. |
+| F17 | **Instruções da IA editáveis em Ajustes**, mesma API e mesmo comportamento do Acervo (D25 de lá): o padrão fica em `regras/`; a versão editada, em `/data/regras`, vale no lugar dele; "Voltar ao padrão" apaga a edição | Pedido do Lucas: ajustar pelo celular como os cartões são montados. |
+| F18 | **Imagens pela API da Wikipédia**, não pela IA navegando: a IA indica o título do artigo (ex.: "Luiz Inácio Lula da Silva") e o servidor busca a foto principal dele. No editor, a mesma busca é manual; também dá para enviar do aparelho | É mais rápido, não gasta a assinatura, acerta a foto do artigo certo e as fotos têm licença livre (Wikimedia Commons). |
+| F19 | Imagens **baixadas para o servidor** (`/data/media`, nome = hash do conteúdo, só JPG, PNG, WebP e GIF conferidos pelo conteúdo; SVG recusado). Da internet, só de `upload.wikimedia.org` e `thumb.wikimedia.org`. Na proposta, a foto fica só como link e é baixada ao aprovar | O cartão não depende da Wikipédia para abrir. A lista fechada de servidores impede o app de virar um baixador de qualquer coisa. O teste real mostrou que a Wikipédia passou a servir miniaturas por `thumb.wikimedia.org`. |
+| F20 | A imagem é **da nota** e aparece **junto da resposta** | Simples e serve aos dois usos principais (rosto de quem é a resposta; ilustração do vocabulário). Imagem na frente fica para quando fizer falta. |
 
 ## 3. Como roda
 

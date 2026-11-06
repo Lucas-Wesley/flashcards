@@ -14,10 +14,18 @@ COPY --from=web /src/dist ./web/dist
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION}" -o /app .
 
-# O binário embute o PWA e o banco de fusos; a imagem final só precisa do wget do healthcheck.
-FROM alpine:3.22
+# O Node fica na imagem final: o Claude Code, que gera os baralhos, roda nele (como no Acervo).
+FROM node:24-alpine
+RUN apk add --no-cache ripgrep libgcc libstdc++ \
+ && npm install -g @anthropic-ai/claude-code \
+ && npm cache clean --force
 COPY --from=api /app /app
+COPY regras /regras
 USER 1000:1000
 ENV DATA_DIR=/data \
-    FUSO=America/Sao_Paulo
+    REGRAS_DIR=/regras \
+    HOME=/data/home \
+    FUSO=America/Sao_Paulo \
+    USE_BUILTIN_RIPGREP=0 \
+    DISABLE_AUTOUPDATER=1
 ENTRYPOINT ["/app"]

@@ -5,6 +5,7 @@ import { defineConfig } from '@playwright/test'
 const remoto = process.env.E2E_BASE_URL
 // O teste local roda num servidor e num banco só dele.
 const dados = path.join(os.tmpdir(), 'flashcards-e2e')
+const testdata = path.resolve('../backend/testdata')
 
 export default defineConfig({
   testDir: './e2e',
@@ -20,7 +21,14 @@ export default defineConfig({
         {
           command: `rm -rf "${dados}" && go run .`,
           cwd: '../backend',
-          env: { DATA_DIR: dados, ADDR: ':8095' },
+          // Claude falso; a Wikipédia aponta para uma porta fechada (cartões sem foto, sem sair da máquina).
+          env: {
+            DATA_DIR: dados,
+            ADDR: ':8095',
+            CLAUDE_BIN: path.join(testdata, 'claude-falso'),
+            REGRAS_DIR: path.resolve('../regras'),
+            WIKI_API: 'http://127.0.0.1:9/w/api.php',
+          },
           url: 'http://localhost:8095/api/health',
         },
         {

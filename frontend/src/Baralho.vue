@@ -92,6 +92,7 @@ onMounted(carregar)
       </div>
       <div class="linha-acoes">
         <a class="botao" :href="`#/adicionar/${b.id}`">Adicionar cartões</a>
+        <a class="botao" :href="`#/gerar/${b.id}`">Gerar com IA</a>
         <a class="botao" :href="`#/importar/${b.id}`">Importar</a>
         <a v-if="b.cartoes" class="botao" :href="`#/cartoes/${b.id}`">Ver os {{ b.cartoes }} cartões</a>
       </div>

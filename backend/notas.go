@@ -19,6 +19,7 @@ type nota struct {
 	Frente       string         `json:"frente"`
 	Verso        string         `json:"verso"`
 	Tags         string         `json:"tags"`
+	Imagem       string         `json:"imagem"`
 	CriadaEm     string         `json:"criada_em"`
 	AtualizadaEm string         `json:"atualizada_em"`
 	Cartoes      []cartaoResumo `json:"cartoes"`
@@ -55,6 +56,7 @@ type dadosDaNota struct {
 	Frente    string `json:"frente"`
 	Verso     string `json:"verso"`
 	Tags      string `json:"tags"`
+	Imagem    string `json:"imagem"`
 }
 
 func (d *dadosDaNota) validar() string {
@@ -71,6 +73,8 @@ func (d *dadosDaNota) validar() string {
 		return "Escreva a frente do cartão."
 	case d.Tipo == "invertido" && d.Verso == "":
 		return "No cartão nos dois sentidos, o verso também é pergunta: escreva o verso."
+	case d.Imagem != "" && !nomeDeImagem.MatchString(d.Imagem):
+		return "Imagem inválida."
 	}
 	return ""
 }
@@ -90,8 +94,8 @@ func criarCartoes(ctx context.Context, tx *sql.Tx, notaID, baralhoID, tipo, agor
 
 func (a *app) criarNota(ctx context.Context, tx *sql.Tx, d dadosDaNota) (string, error) {
 	id := novoID()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO notas (id, baralho_id, tipo, frente, verso, tags, criada_em, atualizada_em)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, a.agora(), a.agora()); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO notas (id, baralho_id, tipo, frente, verso, tags, imagem, criada_em, atualizada_em)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, d.Imagem, a.agora(), a.agora()); err != nil {
 		return "", err
 	}
 	return id, criarCartoes(ctx, tx, id, d.BaralhoID, d.Tipo, a.agora())
@@ -155,8 +159,8 @@ func (a *app) handleMudarNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `UPDATE notas SET baralho_id = ?, tipo = ?, frente = ?, verso = ?, tags = ?, atualizada_em = ? WHERE id = ?`,
-		d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, a.agora(), id)
+	res, err := tx.ExecContext(ctx, `UPDATE notas SET baralho_id = ?, tipo = ?, frente = ?, verso = ?, tags = ?, imagem = ?, atualizada_em = ? WHERE id = ?`,
+		d.BaralhoID, d.Tipo, d.Frente, d.Verso, d.Tags, d.Imagem, a.agora(), id)
 	if err != nil {
 		falha(w, err)
 		return
@@ -234,7 +238,7 @@ func (a *app) handleNotas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) notas(ctx context.Context, filtro string, args ...any) ([]nota, error) {
-	rows, err := a.db.QueryContext(ctx, `SELECT id, baralho_id, tipo, frente, verso, tags, criada_em, atualizada_em FROM notas `+filtro, args...)
+	rows, err := a.db.QueryContext(ctx, `SELECT id, baralho_id, tipo, frente, verso, tags, imagem, criada_em, atualizada_em FROM notas `+filtro, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +246,7 @@ func (a *app) notas(ctx context.Context, filtro string, args ...any) ([]nota, er
 	indice := map[string]int{}
 	for rows.Next() {
 		var n nota
-		if err := rows.Scan(&n.ID, &n.BaralhoID, &n.Tipo, &n.Frente, &n.Verso, &n.Tags, &n.CriadaEm, &n.AtualizadaEm); err != nil {
+		if err := rows.Scan(&n.ID, &n.BaralhoID, &n.Tipo, &n.Frente, &n.Verso, &n.Tags, &n.Imagem, &n.CriadaEm, &n.AtualizadaEm); err != nil {
 			rows.Close()
 			return nil, err
 		}

@@ -4,17 +4,59 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
-// app junta o que os handlers usam.
-type app struct {
-	db  *sql.DB
-	rel relogio
+type config struct {
+	dados  string // DATA_DIR
+	regras string // instruções padrão da IA (regras/ do repositório)
+	claude string
+	modelo string // vazio = o padrão do Claude Code
+	// Busca de imagens: a API da Wikipédia ("%s" é o idioma) e os servidores de onde o app aceita
+	// baixar imagem. Os testes trocam os dois por um servidor falso.
+	wiki          string
+	hostsDeImagem []string
 }
 
-func novoApp(db *sql.DB, rel relogio) *app {
-	return &app{db: db, rel: rel}
+func configDoAmbiente(dados string) config {
+	return config{
+		dados:         absoluto(dados),
+		regras:        absoluto(env("REGRAS_DIR", "../regras")),
+		claude:        env("CLAUDE_BIN", "claude"),
+		modelo:        os.Getenv("CLAUDE_MODEL"),
+		wiki:          env("WIKI_API", "https://%s.wikipedia.org/w/api.php"),
+		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org"), ","),
+	}
+}
+
+// absoluto: o claude roda em outra pasta, e um caminho relativo apontaria errado.
+func absoluto(caminho string) string {
+	if abs, err := filepath.Abs(caminho); err == nil {
+		return abs
+	}
+	return caminho
+}
+
+// app junta o que os handlers e a fila usam.
+type app struct {
+	db   *sql.DB
+	rel  relogio
+	cfg  config
+	fila *filaDaIA
+}
+
+func novoApp(db *sql.DB, rel relogio, cfg config) (*app, error) {
+	for _, pasta := range []string{"media", "geracoes"} {
+		if err := os.MkdirAll(filepath.Join(cfg.dados, pasta), 0o755); err != nil {
+			return nil, err
+		}
+	}
+	a := &app{db: db, rel: rel, cfg: cfg}
+	a.fila = novaFila(a)
+	return a, nil
 }
 
 // Estados do cartão: os mesmos números do FSRS.

@@ -9,6 +9,7 @@ gerais. Parte do ecossistema de apps do homelab; roda em `https://192.168.1.20:8
 | Backend | Go (biblioteca padrão) |
 | Banco | SQLite (`modernc.org/sqlite`, sem CGO) |
 | Repetição espaçada | FSRS-6 (`go-fsrs/v4`) |
+| IA | Claude Code headless (`claude -p`), para gerar baralhos; imagens pela API da Wikipédia |
 | Produção | Um binário Go com o PWA embutido, em container, atrás do Caddy |
 
 ## Como rodar

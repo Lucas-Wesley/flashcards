@@ -148,6 +148,7 @@ onBeforeUnmount(() => {
       <template v-if="mostrando">
         <hr />
         <div class="verso texto-cartao">{{ cartao.verso }}</div>
+        <img v-if="cartao.imagem" class="foto" :src="`/api/imagens/${cartao.imagem}`" alt="" />
       </template>
     </section>
 
@@ -266,6 +267,15 @@ onBeforeUnmount(() => {
 .verso {
   font-size: clamp(1.25rem, 3.2vw, 1.6rem);
   color: var(--texto);
+}
+
+.foto {
+  display: block;
+  max-width: min(100%, 420px);
+  max-height: 40vh;
+  margin: 24px auto 0;
+  border-radius: var(--raio);
+  object-fit: contain;
 }
 
 hr {

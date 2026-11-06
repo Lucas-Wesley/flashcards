@@ -3,7 +3,7 @@
 App do **ecossistema de apps pessoais do Lucas**: flashcards com repetição espaçada, no estilo do
 Anki, simplificado. É o **3º app** (depois da Biblioteca Digital e do Acervo; ver ROADMAP do Hub).
 
-**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F14) e próximos passos.
+**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F20) e próximos passos.
 
 ## Em uma frase
 Baralhos → notas (frente e verso, ou nos dois sentidos) → cartões agendados pelo **FSRS-6**
@@ -18,6 +18,11 @@ Mesma infraestrutura e mesmo design system (`docs/DESIGN-SYSTEM.md`) da Bibliote
 - **Mexeu no agendamento? Rode `go test ./...`.** `agenda_test.go` prova o comportamento do FSRS e
   a virada do dia (F3, F4); `estudo_test.go`, a ordem da fila, os limites e os irmãos.
 - Horários no banco em RFC 3339, UTC, sem fração de segundo (a ordem do texto é a ordem do tempo).
-- Dados (banco e, no futuro, mídia) **nunca** vão para o Git.
+- Dados (banco e imagens em `/data/media`) **nunca** vão para o Git.
+- **A instrução da IA em vigor pode estar editada no app** (F17). Antes de mudar `regras/`, ler a do
+  servidor (`GET https://192.168.1.20:8445/api/instrucoes/gerar-baralho.md`, com
+  `--cacert ../certs/homelab-ca.crt`). Se estiver editada, levar a edição para `regras/` e só então
+  voltar a do servidor ao padrão (`DELETE`), para nada se perder.
+- Imagens só de servidores da Wikimedia (F19); para aceitar outro, mudar `HOSTS_DE_IMAGEM` com cuidado.
 - Integração com Biblioteca/Acervo só quando os dois lados existirem; **não definir o contrato comum antes**.
 - **Commits:** autoria do Lucas; **sem linha `Co-Authored-By`**.

@@ -7,7 +7,7 @@ test('cria o baralho, adiciona cartões e importa uma lista', async ({ page }) =
   await page.goto('/')
   await expect(page.getByText('Nenhum baralho ainda.')).toBeVisible()
   await page.getByLabel('Nome do novo baralho').fill('Inglês')
-  await page.getByRole('button', { name: 'Criar' }).click()
+  await page.getByRole('button', { name: 'Criar vazio' }).click()
   await page.getByRole('link', { name: /Inglês/ }).first().click()
   await expect(page.getByRole('heading', { name: 'Inglês' })).toBeVisible()
 
@@ -77,6 +77,40 @@ test('busca, edita e suspende um cartão', async ({ page }) => {
   await expect(page.getByText(/Suspenso/)).toBeVisible()
   await page.getByRole('button', { name: 'Reativar' }).click()
   await expect(page.getByText(/Revisão em/)).toBeVisible()
+})
+
+test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('link', { name: 'peça à IA um baralho pronto' }).click()
+  await page.getByLabel('Pedido').fill('presidentes do Brasil no século 21')
+  await page.getByLabel('Quantidade').fill('10')
+  await page.getByRole('button', { name: 'Pedir à IA' }).click()
+
+  await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText('2 cartões propostos · 2 marcados')).toBeVisible()
+  await expect(page.getByLabel('Nome do baralho novo')).toHaveValue('Presidentes do Brasil no século 21')
+  await page.getByLabel('Incluir o cartão 2').uncheck()
+  await page.getByLabel('Verso do cartão 1').fill('Lula (2003–2010)')
+  await page.getByRole('button', { name: 'Criar baralho com 1 cartão' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Presidentes do Brasil no século 21' })).toBeVisible()
+  await page.getByRole('link', { name: 'Estudar agora' }).click()
+  await expect(page.locator('.frente')).toHaveText('Quem foi presidente do Brasil de 2003 a 2010?')
+  await page.keyboard.press('Space')
+  await expect(page.locator('.verso')).toHaveText('Lula (2003–2010)')
+})
+
+test('edita a instrução da IA e volta ao padrão', async ({ page }) => {
+  await page.goto('/#/ajustes')
+  await page.getByRole('link', { name: /Gerar um baralho/ }).click()
+  await expect(page.locator('.instrucao')).toContainText('Um fato por cartão')
+  await page.getByRole('button', { name: 'Editar' }).click()
+  await page.getByLabel('Texto da instrução').fill('Só cartões curtos.')
+  await page.getByRole('button', { name: 'Salvar' }).click()
+  await expect(page.locator('.instrucao')).toHaveText('Só cartões curtos.')
+  page.once('dialog', (d) => d.accept())
+  await page.getByRole('button', { name: 'Voltar ao padrão' }).click()
+  await expect(page.locator('.instrucao')).toContainText('Um fato por cartão')
 })
 
 test('Ajustes recebe sugestões de melhoria', async ({ page }) => {

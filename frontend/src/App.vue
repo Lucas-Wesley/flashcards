@@ -6,8 +6,11 @@ import Baralhos from './Baralhos.vue'
 import Cartoes from './Cartoes.vue'
 import Editor from './Editor.vue'
 import Estudo from './Estudo.vue'
+import Geracao from './Geracao.vue'
+import Gerar from './Gerar.vue'
 import Icone from './Icone.vue'
 import Importar from './Importar.vue'
+import Instrucao from './Instrucao.vue'
 import { api } from './api.js'
 
 // Rotas no hash, como na Biblioteca e no Acervo: o "voltar" do celular volta para a tela anterior.
@@ -31,7 +34,7 @@ const MENU = [
 
 const secao = computed(() => {
   const n = rota.value.nome
-  if (n === 'baralho' || n === 'importar') return 'baralhos'
+  if (['baralho', 'importar', 'gerar', 'geracao'].includes(n)) return 'baralhos'
   if (n === 'nota') return 'cartoes'
   return n
 })
@@ -116,6 +119,9 @@ onBeforeUnmount(() => {
       <Editor v-else-if="rota.nome === 'adicionar'" :key="'adicionar' + rota.param" :baralho="rota.param" />
       <Editor v-else-if="rota.nome === 'nota'" :key="rota.param" :id="rota.param" />
       <Cartoes v-else-if="rota.nome === 'cartoes'" :key="rota.param" :baralho="rota.param" />
+      <Gerar v-else-if="rota.nome === 'gerar'" :key="'gerar' + rota.param" :baralho="rota.param" />
+      <Geracao v-else-if="rota.nome === 'geracao'" :key="rota.param" :id="rota.param" />
+      <Instrucao v-else-if="rota.nome === 'ajustes' && rota.param.startsWith('instrucoes/')" :key="rota.param" :arquivo="rota.param.slice('instrucoes/'.length)" />
       <Ajustes v-else-if="rota.nome === 'ajustes'" :tela="telaAnterior" />
       <Baralhos v-else />
     </main>

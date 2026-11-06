@@ -14,6 +14,10 @@ git fetch -q origin
 git checkout -q --detach "$SHA"
 
 PREV=$(cat "$STATE" 2>/dev/null || true)
+
+# O token do Claude fica em /opt/apps/flashcards.env, fora da repo.
+[ -f /opt/apps/flashcards.env ] && cp /opt/apps/flashcards.env "$APP_DIR/.env"
+[ -f "$APP_DIR/.env" ] || echo "AVISO: sem /opt/apps/flashcards.env; gerar baralho com IA vai falhar." >&2
 mkdir -p /srv/data/flashcards
 
 export VERSION="$SHA"
