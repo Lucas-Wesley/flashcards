@@ -23,11 +23,13 @@
 - **Cartões de um link** do site do Mairo Vergara (colado em Adicionar → Do link ou mandado pelo Compartilhar do
   Android): cada frase de exemplo vira um cartão, com a tradução e o **áudio** da pronúncia.
 - Ajustes com **Sugestões de melhoria** (API comum do ecossistema).
+- **Cartões do Acervo** (F28): um Tema, capítulo ou Referência mandado de lá vira um pedido à IA, revisado aqui (ou,
+  no caso de uma Referência, também na página dela no Acervo).
 
 **Próximos passos** (ordem sugerida):
 
 1. Mais sites em Adicionar → Do link, cada um com o seu leitor (o Lucas avisa antes de mandar links de um site novo).
-2. Endpoint de integração para receber cartões da Biblioteca e do Acervo (quando os dois lados existirem; ver §4).
+2. Receber trechos da Biblioteca (o Acervo já manda textos, F28; ver §4).
 3. Estudo fora de casa (offline): baixar a fila do dia e subir as respostas depois.
 4. Cloze (lacuna), estatísticas e otimização dos pesos do FSRS com o histórico do Lucas.
 5. Importar `.apkg` do Anki.
@@ -63,6 +65,7 @@
 | F25 | Pedido à IA **editável e refeito** a qualquer momento depois de terminar (falhou, cancelado, descartado, em revisão ou já aprovado), sem histórico do pedido. Aprovado num baralho novo, o refazer passa a mirar o baralho criado; a IA recebe os cartões existentes (frente → verso) e devolve com a mesma frente os que forem mudar. Aprovar **atualiza** a nota de mesma frente (verso, tags, foto, áudio), e os cartões seguem com o histórico | Completar um baralho já estudado ("acrescente quem desenhou cada bandeira") sem duplicar nem zerar o agendamento. |
 | F26 | Proposta da IA guarda só o **link** da foto; o arquivo só é baixado ao aprovar. Mídia sem uso (trocada, de cartão apagado, enviada e abandonada, sobras `.tmp`) é **apagada** ao subir o app e a cada 24 h, depois de 24 h sem uso; conta como em uso o que uma nota ou uma proposta em revisão aponta. O Claude roda com `--no-session-persistence` | Refazer e descartar pedidos não deixa arquivos ocupando o disco do servidor. |
 | F27 | Busca de imagem em **três fontes abertas, sem chave**: Wikipédia (foto do artigo), **Wikimedia Commons** (os arquivos) e **Openverse** (outros acervos, só na busca manual). O termo vai para as fontes; o **cartão inteiro** (frente, verso, tags) ordena o resultado: palavras do termo e do cartão somam, ano citado pesa muito, palavra estranha ao cartão desconta. O ano do cartão também vira uma busca extra no Commons. A IA indica um termo específico do cartão. Baixar só de `HOSTS_DE_IMAGEM` (Wikimedia e `api.openverse.org`), também depois de redirecionamento. Google Imagens fica de fora: não tem API gratuita | Num baralho de um assunto só (bandeiras), cada cartão precisa da imagem do que ele pergunta, não a do assunto geral. |
+| F28 | **Cartões de um texto do Acervo.** `POST /api/textos` recebe `{titulo, baralho, contexto, texto, link}` (até 150 mil caracteres) e cria um pedido à IA de origem `acervo`, na mesma fila e com a mesma revisão. A IA segue `regras/gerar-do-texto.md` (editável em Ajustes): os cartões saem **só do texto**, sem internet; o texto vai pela entrada padrão, não como argumento. O teto de cartões vem do tamanho (1 a cada 80 palavras, de 5 a 100); a IA decide quantos o texto rende. O baralho tem o nome do Tema principal: se já existe, os cartões vão para ele, e os de mesma frente atualizam os que existem. Refazer usa o mesmo texto. A proposta mostra o caminho no Acervo e o link de volta | Pedido do Lucas em 06/11/2026: estudar o que já está no Acervo sem montar cartão à mão. Endpoint próprio, não o contrato comum (que segue sem definir); quando ele existir, `/api/textos` vira um caso dele. |
 
 ## 3. Como roda
 
@@ -70,8 +73,12 @@
 - **Testes:** `make test` — Go (algoritmo, fila e API), Vitest e Playwright (fluxo completo no navegador).
 - **Publicar:** `git push origin main` e `./deploy.sh`. Dados no servidor em `/srv/data/flashcards`.
 
-## 4. Integrações (planejadas, não feitas)
+## 4. Integrações
 
-Biblioteca (seleção de texto) e Acervo (trecho de Tema) → Flashcards. Pelo princípio do ecossistema, o endpoint só nasce
+**Feita:** Acervo → Flashcards (F28), por `POST /api/textos`, chamado pela rede interna do servidor
+(`http://flashcards:8080`). O Acervo também lê e decide as propostas que ele mandou, por `GET /api/geracoes/{id}` e
+`POST /api/geracoes/{id}/{aprovar|descartar|refazer}`.
+
+**Planejada:** Biblioteca (seleção de texto) → Flashcards. Pelo princípio do ecossistema, o endpoint só nasce
 quando o outro lado for mandar de verdade, e é aí que o contrato comum (`CONTRATO.md` do Hub) vira concreto. A ideia
 inicial é `POST /api/v1/cards` recebendo um Fragmento de Conteúdo, que vira uma nota com a fonte guardada.

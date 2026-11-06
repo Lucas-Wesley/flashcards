@@ -15,6 +15,7 @@ import (
 // do CLAUDE_CODE_OAUTH_TOKEN, que fica em /opt/apps/flashcards.env, fora do Git.
 //
 // Gerar um baralho só precisa da internet, para conferir os fatos; arquivos e terminal ficam proibidos.
+// Os cartões de um texto do Acervo saem só do texto: aí nem a internet.
 const (
 	ferramentasInternet  = "WebSearch,WebFetch"
 	ferramentasProibidas = "Bash,Read,Write,Edit,Glob,Grep,Task,NotebookEdit"
@@ -25,6 +26,9 @@ type pedidoClaude struct {
 	regra     string // arquivo em regras/; vale a versão editada no app, se houver
 	instrucao string // o pedido específico desta tarefa
 	esquema   string // JSON Schema da resposta
+	entrada   string // texto longo que vai pela entrada padrão (o de um texto do Acervo), fora do limite de um argumento
+	// semInternet: os cartões saem só do texto recebido; nem a internet fica liberada.
+	semInternet bool
 }
 
 type respostaClaude struct {
@@ -44,6 +48,10 @@ func (a *app) chamarClaude(ctx context.Context, p pedidoClaude) (respostaClaude,
 	// Sem guardar a sessão: cada geração deixaria um histórico em $HOME/.claude que ninguém lê.
 	args := []string{"-p", prompt, "--output-format", "json", "--no-session-persistence",
 		"--allowedTools", ferramentasInternet, "--disallowedTools", ferramentasProibidas}
+	if p.semInternet {
+		args = []string{"-p", prompt, "--output-format", "json", "--no-session-persistence",
+			"--disallowedTools", ferramentasProibidas + "," + ferramentasInternet}
+	}
 	if p.esquema != "" {
 		args = append(args, "--json-schema", p.esquema)
 	}
@@ -53,6 +61,9 @@ func (a *app) chamarClaude(ctx context.Context, p pedidoClaude) (respostaClaude,
 
 	cmd := exec.CommandContext(ctx, a.cfg.claude, args...)
 	cmd.Dir = p.pasta
+	if p.entrada != "" {
+		cmd.Stdin = strings.NewReader(p.entrada)
+	}
 	// Cancelado, o claude morre na hora; não esperar mais que isso por filhos que seguram a saída.
 	cmd.WaitDelay = 5 * time.Second
 	var saida, erros bytes.Buffer

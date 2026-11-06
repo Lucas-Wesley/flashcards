@@ -161,14 +161,14 @@ test('estuda todos os baralhos misturados pelo botão do topo', async ({ page })
 test('edita a instrução da IA e volta ao padrão', async ({ page }) => {
   await page.goto('/#/ajustes')
   await page.getByRole('link', { name: /Gerar um baralho/ }).click()
-  await expect(page.locator('.instrucao')).toContainText('Um fato por cartão')
+  await expect(page.locator('article.instrucao')).toContainText('Um fato por cartão')
   await page.getByRole('button', { name: 'Editar' }).click()
   await page.getByLabel('Texto da instrução').fill('Só cartões curtos.')
   await page.getByRole('button', { name: 'Salvar' }).click()
-  await expect(page.locator('.instrucao')).toHaveText('Só cartões curtos.')
+  await expect(page.locator('article.instrucao')).toHaveText('Só cartões curtos.')
   page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Voltar ao padrão' }).click()
-  await expect(page.locator('.instrucao')).toContainText('Um fato por cartão')
+  await expect(page.locator('article.instrucao')).toContainText('Um fato por cartão')
 })
 
 test('Ajustes recebe sugestões de melhoria', async ({ page }) => {

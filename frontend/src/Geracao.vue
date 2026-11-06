@@ -34,10 +34,11 @@ const NOMES = {
 }
 
 const doLink = computed(() => g.value?.origem === 'link')
+const doAcervo = computed(() => g.value?.origem === 'acervo')
 const trabalhando = computed(() => ['na_fila', 'rodando'].includes(g.value?.estado))
 const escolhidos = computed(() => cartoes.value.filter((c) => c.incluir))
 const atualizacoes = computed(() => escolhidos.value.filter((c) => c.atualiza).length)
-const podeRefazer = computed(() => g.value && !doLink.value && !trabalhando.value)
+const podeRefazer = computed(() => g.value && !doLink.value && !doAcervo.value && !trabalhando.value)
 
 async function carregar() {
   try {
@@ -58,6 +59,7 @@ async function carregar() {
 
 async function acao(qual) {
   if (qual === 'descartar' && !confirm('Descartar esta proposta? Nenhum cartão será criado.')) return
+  if (qual === 'refazer' && g.value.estado === 'em_revisao' && !confirm('Refazer troca a proposta atual pela nova. Continuar?')) return
   try {
     g.value = await api(`/api/geracoes/${props.id}/${qual}`, { metodo: 'POST' })
     if (qual === 'refazer') carregar()
@@ -133,8 +135,13 @@ onBeforeUnmount(() => clearTimeout(relogio))
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="g">
-      <h1>{{ doLink ? 'Cartões do link' : 'Gerar com IA' }}</h1>
+      <h1>{{ doLink ? 'Cartões do link' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
       <p v-if="doLink" class="pedido link"><a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a></p>
+      <p v-else-if="doAcervo" class="pedido">
+        {{ g.pedido }}
+        <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir no Acervo</a>
+        <button v-if="!trabalhando" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
+      </p>
       <form v-else-if="editando" class="edicao" @submit.prevent="refazer">
         <textarea
           v-model="novoPedido"
@@ -165,12 +172,12 @@ onBeforeUnmount(() => clearTimeout(relogio))
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
         }}</span>
-        <template v-if="!doLink">cerca de {{ g.quantidade }} · </template>{{ g.tipo === 'invertido' ? 'nos dois sentidos' : 'frente e verso' }} · {{ doLink ? 'lido' : 'pedido' }} em {{ hora(g.criado_em) }}
+        <template v-if="doAcervo">até {{ g.quantidade }} · </template><template v-else-if="!doLink">cerca de {{ g.quantidade }} · </template>{{ g.tipo === 'invertido' ? 'nos dois sentidos' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
       </p>
 
       <template v-if="trabalhando">
         <p class="suave espera">
-          {{ g.estado === 'na_fila' ? 'Esperando a vez: a IA faz um pedido por vez.' : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.' }}
+          {{ g.estado === 'na_fila' ? 'Esperando a vez: a IA faz um pedido por vez.' : doAcervo ? 'Ela lê o texto e escolhe o que vale virar cartão; costuma levar alguns minutos.' : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.' }}
           Pode sair desta tela: o pedido continua e aparece em Baralhos quando a proposta estiver pronta.
         </p>
         <button class="botao perigo" @click="acao('cancelar')">Cancelar pedido</button>

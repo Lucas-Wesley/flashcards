@@ -386,3 +386,62 @@ func TestLimpezaApagaSoAMidiaSemUso(t *testing.T) {
 		t.Fatalf("a imagem que saiu do cartão devia ser apagada: %d", n)
 	}
 }
+
+func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
+	e := novoAmbiente(t)
+	texto := "TEXTO DO ACERVO. " + strings.Repeat("A Revolução Francesa começou em 1789. ", 300)
+	pedir := func() geracao {
+		var g geracao
+		if s := e.pedir("POST", "/api/textos", map[string]any{
+			"titulo": "História › Revolução Francesa", "baralho": "História", "contexto": "Tema História, capítulo Revolução Francesa.",
+			"texto": texto, "link": "https://acervo/#/ler/historia/indice.md",
+		}, &g); s != http.StatusCreated {
+			t.Fatalf("pedir do texto: %d", s)
+		}
+		return g
+	}
+	g := pedir()
+	if g.Origem != origemAcervo || g.Quantidade != 22 || g.Link == "" || g.BaralhoID != "" {
+		t.Fatalf("pedido: %+v", g)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+	obs := g.Proposta.Observacoes
+	// O texto vai pela entrada, e a IA não usa a internet.
+	if !strings.Contains(obs, "Recebeu o texto pela entrada.") || !strings.Contains(obs, "Seguiu a instrução do texto.") ||
+		!strings.Contains(obs, "Ferramentas: ;") || !strings.Contains(obs, "WebSearch,WebFetch.") {
+		t.Fatalf("observações: %q", obs)
+	}
+	// O baralho novo tem o nome do Tema, seja qual for o que a IA sugeriu.
+	if g.Proposta.NomeBaralho != "História" {
+		t.Fatalf("nome: %q", g.Proposta.NomeBaralho)
+	}
+	var r map[string]any
+	if s := e.pedir("POST", "/api/geracoes/"+strconv.FormatInt(g.ID, 10)+"/aprovar", map[string]any{"nome_baralho": "História", "cartoes": g.Proposta.Cartoes[:1]}, &r); s != http.StatusOK {
+		t.Fatalf("aprovar: %d", s)
+	}
+
+	// O próximo capítulo do mesmo Tema vai para o baralho que já existe e sabe dos cartões dele.
+	g2 := pedir()
+	if g2.BaralhoID != r["baralho_id"] {
+		t.Fatalf("baralho do segundo: %q, esperava %v", g2.BaralhoID, r["baralho_id"])
+	}
+	g2 = e.esperarGeracao(g2.ID, emRevisao)
+	if !strings.Contains(g2.Proposta.Observacoes, "Recebeu os cartões existentes.") || !g2.Proposta.Cartoes[0].Atualiza {
+		t.Fatalf("segundo: %+v", g2.Proposta)
+	}
+	// Refazer usa o mesmo texto.
+	if s := e.pedir("POST", "/api/geracoes/"+strconv.FormatInt(g2.ID, 10)+"/refazer", nil, nil); s != http.StatusOK {
+		t.Fatalf("refazer: %d", s)
+	}
+	g2 = e.esperarGeracao(g2.ID, emRevisao)
+	if !strings.Contains(g2.Proposta.Observacoes, "Recebeu o texto pela entrada.") {
+		t.Fatalf("refeito: %q", g2.Proposta.Observacoes)
+	}
+
+	if s := e.pedir("POST", "/api/textos", map[string]any{"titulo": "x", "texto": "curto"}, nil); s != http.StatusBadRequest {
+		t.Errorf("texto curto: %d", s)
+	}
+	if s := e.pedir("POST", "/api/textos", map[string]any{"titulo": "x", "texto": strings.Repeat("a", tamanhoMaximoDoTexto+1)}, nil); s != http.StatusRequestEntityTooLarge {
+		t.Errorf("texto grande: %d", s)
+	}
+}

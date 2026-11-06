@@ -17,4 +17,7 @@ obs="Ferramentas: $ferramentas; proibidas: $proibidas."
 case "$prompt" in *"REGRA EDITADA"*) obs="$obs Seguiu a instrução editada." ;; esac
 case "$prompt" in *"Ele já tem estes cartões"*) obs="$obs Recebeu os cartões existentes." ;; esac
 case "$prompt" in *"PEDIDO EDITADO"*) obs="$obs Recebeu o pedido editado." ;; esac
+entrada=$(cat)
+case "$entrada" in *"<texto>"*"TEXTO DO ACERVO"*"</texto>"*) obs="$obs Recebeu o texto pela entrada." ;; esac
+case "$prompt" in *"gerar-do-texto"*|*"cartões de um texto do Acervo"*) obs="$obs Seguiu a instrução do texto." ;; esac
 printf '{"type":"result","result":"","is_error":false,"structured_output":{"nome_baralho":"Presidentes do Brasil no século 21","observacoes":"%s","cartoes":[{"frente":"Quem foi presidente do Brasil de 2003 a 2010?","verso":"Luiz Inácio Lula da Silva","tags":"presidentes","imagem":"Luiz Inácio Lula da Silva"},{"frente":"Quem sucedeu Lula em 2011?","verso":"Dilma Rousseff","tags":"presidentes","imagem":""},{"frente":"  ","verso":"cartão vazio, deve sumir","tags":"","imagem":""}]}}\n' "$obs"

@@ -35,19 +35,25 @@ const (
 const tempoMaximoDaGeracao = 15 * time.Minute
 
 type geracao struct {
-	ID          int64     `json:"id"`
-	Origem      string    `json:"origem"`
-	Pedido      string    `json:"pedido"`
-	Quantidade  int       `json:"quantidade"`
-	Tipo        string    `json:"tipo"`
-	BaralhoID   string    `json:"baralho_id"`
-	Estado      string    `json:"estado"`
-	Erro        string    `json:"erro"`
-	Proposta    *proposta `json:"proposta,omitempty"`
-	Resultado   string    `json:"resultado"`
-	CriadoEm    string    `json:"criado_em"`
-	IniciadoEm  string    `json:"iniciado_em"`
-	TerminadoEm string    `json:"terminado_em"`
+	ID     int64  `json:"id"`
+	Origem string `json:"origem"`
+	Pedido string `json:"pedido"`
+	// Num texto do Acervo: o texto (só a IA lê), onde ele fica (Tema › capítulo) e o link de volta.
+	Texto    string `json:"-"`
+	Contexto string `json:"contexto,omitempty"`
+	Link     string `json:"link,omitempty"`
+	// NomeSugerido: o nome que o Acervo dá ao baralho (o do Tema), quando ele ainda não existe.
+	NomeSugerido string    `json:"nome_sugerido,omitempty"`
+	Quantidade   int       `json:"quantidade"`
+	Tipo         string    `json:"tipo"`
+	BaralhoID    string    `json:"baralho_id"`
+	Estado       string    `json:"estado"`
+	Erro         string    `json:"erro"`
+	Proposta     *proposta `json:"proposta,omitempty"`
+	Resultado    string    `json:"resultado"`
+	CriadoEm     string    `json:"criado_em"`
+	IniciadoEm   string    `json:"iniciado_em"`
+	TerminadoEm  string    `json:"terminado_em"`
 }
 
 type proposta struct {
@@ -95,12 +101,12 @@ const esquemaProposta = `{
   "required": ["nome_baralho", "cartoes"]
 }`
 
-const colunasGeracao = `id, origem, pedido, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
+const colunasGeracao = `id, origem, pedido, texto, contexto, link, nome_sugerido, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
 
 func lerGeracao(l linha) (*geracao, error) {
 	var g geracao
 	var p string
-	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
+	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Texto, &g.Contexto, &g.Link, &g.NomeSugerido, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
 		&g.CriadoEm, &g.IniciadoEm, &g.TerminadoEm); err != nil {
 		return nil, err
 	}
@@ -237,14 +243,18 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		}
 	}
 
-	r, err := a.chamarClaude(ctx, pedidoClaude{
+	pedido := pedidoClaude{
 		pasta: pasta,
 		regra: "gerar-baralho.md",
 		instrucao: fmt.Sprintf("O Lucas pediu um baralho de flashcards.\n\nPedido: %q\n\nQuantidade: cerca de %d notas.\n"+
 			"Tipo das notas: %s.\n%s\n\nDevolva os dados no formato pedido.",
 			g.Pedido, g.Quantidade, nomesDosTipos[g.Tipo], destino),
 		esquema: esquemaProposta,
-	})
+	}
+	if g.Origem == origemAcervo {
+		pedido = pedidoDoTexto(g, destino, pasta)
+	}
+	r, err := a.chamarClaude(ctx, pedido)
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +263,9 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		return nil, err
 	}
 	p.NomeBaralho = strings.TrimSpace(p.NomeBaralho)
+	if g.BaralhoID == "" && g.NomeSugerido != "" {
+		p.NomeBaralho = g.NomeSugerido
+	}
 	cartoes := p.Cartoes[:0]
 	for _, c := range p.Cartoes {
 		c.Frente, c.Verso, c.Tags, c.Imagem = strings.TrimSpace(c.Frente), strings.TrimSpace(c.Verso), limparTags(c.Tags), strings.TrimSpace(c.Imagem)
@@ -374,7 +387,7 @@ func (a *app) handleGeracoes(w http.ResponseWriter, r *http.Request) {
 		[]any{naFila, rodando, emRevisao, falhou}
 	if b := r.URL.Query().Get("baralho"); b != "" {
 		consulta, args = `SELECT `+colunasGeracao+` FROM geracoes
-			WHERE origem = 'ia' AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
+			WHERE origem IN ('ia', 'acervo') AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
 	}
 	rows, err := a.db.QueryContext(r.Context(), consulta, args...)
 	if err != nil {
@@ -426,7 +439,8 @@ func (a *app) responderGeracao(w http.ResponseWriter, r *http.Request, status in
 
 // handleAcaoGeracao: cancelar (na fila ou rodando), refazer e descartar (a proposta).
 //
-// Refazer volta o pedido para a fila, com o texto (e a quantidade) editados quando vierem no corpo;
+// Refazer volta o pedido para a fila, com o texto (e a quantidade) editados quando vierem no corpo
+// (num texto do Acervo, o pedido é o nome do texto: refaz com o mesmo texto);
 // vale depois de terminar de qualquer jeito, inclusive com a proposta ainda em revisão (ela é
 // trocada pela nova) ou já aprovada: aí a IA trabalha no baralho que foi criado, e os cartões que
 // ela devolver com a mesma frente atualizam os que já existem. Não guarda histórico do pedido.
@@ -468,7 +482,7 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 				quantidade = CASE WHEN ? = 0 THEN quantidade ELSE ? END,
 				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
 				resultado = ''
-			WHERE id = ? AND origem = 'ia' AND estado IN (?, ?, ?, ?, ?)`,
+			WHERE id = ? AND origem IN ('ia', 'acervo') AND estado IN (?, ?, ?, ?, ?)`,
 			naFila, corpo.Pedido, corpo.Pedido, corpo.Quantidade, corpo.Quantidade, concluida,
 			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()

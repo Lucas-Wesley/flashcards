@@ -109,6 +109,10 @@ func migrar(db *sql.DB) error {
 		{"notas", "imagem", `TEXT NOT NULL DEFAULT ''`},
 		{"notas", "audio", `TEXT NOT NULL DEFAULT ''`},
 		{"geracoes", "origem", `TEXT NOT NULL DEFAULT 'ia'`},
+		{"geracoes", "texto", `TEXT NOT NULL DEFAULT ''`},
+		{"geracoes", "contexto", `TEXT NOT NULL DEFAULT ''`},
+		{"geracoes", "link", `TEXT NOT NULL DEFAULT ''`},
+		{"geracoes", "nome_sugerido", `TEXT NOT NULL DEFAULT ''`},
 	}
 	for _, n := range novas {
 		var existe int
@@ -181,8 +185,8 @@ CREATE INDEX IF NOT EXISTS revisoes_dia ON revisoes (baralho_id, revisado_em);
 -- Pedidos de baralho à IA: entram na fila, viram uma proposta e esperam a revisão do Lucas.
 CREATE TABLE IF NOT EXISTS geracoes (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
-	origem       TEXT NOT NULL DEFAULT 'ia', -- 'ia' (pedido à IA) ou 'link' (frases de uma página)
-	pedido       TEXT NOT NULL, -- o pedido à IA, ou o link
+	origem       TEXT NOT NULL DEFAULT 'ia', -- 'ia' (pedido à IA), 'link' (frases de uma página) ou 'acervo' (um texto do Acervo)
+	pedido       TEXT NOT NULL, -- o pedido à IA, o link, ou o nome do texto do Acervo
 	quantidade   INTEGER NOT NULL,
 	tipo         TEXT NOT NULL,
 	baralho_id   TEXT NOT NULL DEFAULT '', -- vazio = baralho novo

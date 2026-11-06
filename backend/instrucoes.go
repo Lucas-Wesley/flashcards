@@ -23,6 +23,7 @@ type instrucao struct {
 
 var instrucoes = []instrucao{
 	{Arquivo: "gerar-baralho.md", Nome: "Gerar um baralho", Descricao: "Como a IA monta os cartões a partir do seu pedido: o que vai na frente e no verso, quantos fatos por cartão, como conferir os fatos e quando sugerir uma imagem."},
+	{Arquivo: "gerar-do-texto.md", Nome: "Cartões de um texto do Acervo", Descricao: "Como a IA tira cartões de um Tema, capítulo ou Referência que você mandou do Acervo: o que vale virar cartão, o que fica de fora e como tratar as fontes do texto."},
 }
 
 func instrucaoConhecida(arquivo string) (instrucao, bool) {
