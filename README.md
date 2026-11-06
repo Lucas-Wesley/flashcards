@@ -1,28 +1,24 @@
-# flashcards
+# Flashcards
 
-App próprio de **flashcards com repetição espaçada** (tipo Anki), construído do zero para
-aprender no processo e usar de verdade — foco em **idiomas** e conhecimentos gerais.
-
-> **Status:** planejamento. Ainda não há código; o desenho completo está em
-> [`PLANO.md`](./PLANO.md).
-
-## Visão geral
+App próprio de **flashcards com repetição espaçada** (estilo Anki), para idiomas e conhecimentos
+gerais. Parte do ecossistema de apps do homelab; roda em `https://192.168.1.20:8445`.
 
 | Camada | Escolha |
 |---|---|
-| Frontend | Vue 3 + Vite + TypeScript (PWA) |
-| Backend | Go (stdlib / `chi`) |
+| Frontend | Vue 3 + Vite, PWA |
+| Backend | Go (biblioteca padrão) |
 | Banco | SQLite (`modernc.org/sqlite`, sem CGO) |
-| Repetição espaçada | FSRS v6 (`go-fsrs/v4`) |
-| Mídia | arquivos em `/media`; o banco guarda só o nome |
-| Desenvolvimento | 100% em containers (Docker) |
-| Produção | binário Go único com o front embutido (`go:embed`) |
+| Repetição espaçada | FSRS-6 (`go-fsrs/v4`) |
+| Produção | Um binário Go com o PWA embutido, em container, atrás do Caddy |
 
-## Como vai rodar
+## Como rodar
 
-- **Desenvolvimento:** containers com hot reload (`air` + Vite).
-- **Produção (home lab):** M920q, em VM Debian com Docker no Proxmox.
-  Deploy = `git pull` + `docker compose up -d`.
-- Acesso só pela rede local; fora de casa, apenas por VPN. Nada exposto à internet.
+```sh
+make dev-api   # API em :8080, dados em ./data
+make dev-web   # PWA com hot reload, proxy de /api para :8080
+make test      # Go, Vitest e Playwright
+./deploy.sh    # publica o commit de origin/main no homelab
+```
 
-Detalhes de arquitetura, funcionalidades e ordem de trabalho: veja [`PLANO.md`](./PLANO.md).
+Decisões, estado atual e próximos passos: [`docs/DECISOES.md`](docs/DECISOES.md).
+Design system comum às apps: [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md).
