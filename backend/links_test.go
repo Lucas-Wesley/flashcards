@@ -88,8 +88,16 @@ func TestCartoesDeUmLink(t *testing.T) {
 	}
 	// Para um baralho novo, tudo de novo, com o título como nome sugerido.
 	e.pedir("POST", "/api/links", map[string]string{"url": link}, &g)
-	if g.Proposta.NomeBaralho != "Run Into" || len(g.Proposta.Cartoes) != 3 {
-		t.Fatalf("baralho novo: %+v", g.Proposta)
+	if g.Proposta.NomeBaralho != "Run Into" || len(g.Proposta.Cartoes) != 3 || g.PodeRefazer {
+		t.Fatalf("baralho novo: %+v (pode refazer: %v)", g.Proposta, g.PodeRefazer)
+	}
+	// Excluir apaga o pedido.
+	excluido := "/api/geracoes/" + strconv.FormatInt(g.ID, 10)
+	if s := e.pedir("DELETE", excluido, nil, nil); s != http.StatusNoContent {
+		t.Errorf("excluir: %d", s)
+	}
+	if s := e.pedir("GET", excluido, nil, nil); s != http.StatusNotFound {
+		t.Errorf("pedido excluído ainda aparece: %d", s)
 	}
 
 	if s := e.pedir("POST", "/api/links", map[string]string{"url": "ftp://exemplo.com/x"}, nil); s != http.StatusBadRequest {
@@ -113,7 +121,7 @@ func TestLinkComMuitasFrasesAIAEscolheAsMaisDidaticas(t *testing.T) {
 	if s := e.pedir("POST", "/api/links", map[string]string{"url": link}, &g); s != http.StatusCreated {
 		t.Fatalf("link: %d", s)
 	}
-	if g.Origem != "link" || g.Estado != naFila || g.Quantidade != 3 || g.Proposta != nil {
+	if g.Origem != "link" || g.Estado != naFila || g.Quantidade != 3 || g.Proposta != nil || !g.PodeRefazer {
 		t.Fatalf("pedido na fila: %+v", g)
 	}
 	id := strconv.FormatInt(g.ID, 10)

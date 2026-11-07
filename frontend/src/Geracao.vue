@@ -71,8 +71,19 @@ async function carregarBaralhos() {
   destino.value = g.value.baralho_id || (doLink.value ? (baralhos.value.find((b) => semAcento(b.nome) === 'ingles')?.id ?? '') : '')
 }
 
+async function excluir() {
+  const aviso = g.value.estado === 'concluida' ? 'Excluir este pedido? Os cartões já aprovados continuam no baralho.' : 'Excluir este pedido? Nenhum cartão será criado.'
+  if (!confirm(aviso)) return
+  try {
+    await api(`/api/geracoes/${props.id}`, { metodo: 'DELETE' })
+    recado('Pedido excluído.')
+    location.hash = '#/pedidos'
+  } catch (e) {
+    recado(e.message, true)
+  }
+}
+
 async function acao(qual) {
-  if (qual === 'descartar' && !confirm('Descartar esta proposta? Nenhum cartão será criado.')) return
   if (qual === 'refazer' && g.value.estado === 'em_revisao' && !confirm('Refazer troca a proposta atual pela nova. Continuar?')) return
   try {
     g.value = await api(`/api/geracoes/${props.id}/${qual}`, { metodo: 'POST' })
@@ -154,7 +165,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
       <p v-else-if="doAcervo" class="pedido">
         {{ g.pedido }}
         <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir no Acervo</a>
-        <button v-if="!trabalhando" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
+        <button v-if="!trabalhando && g.estado !== 'em_revisao'" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
       </p>
       <form v-else-if="editando" class="edicao" @submit.prevent="refazer">
         <textarea
@@ -200,7 +211,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
                   ? 'Ela lê o texto e escolhe o que vale virar cartão; costuma levar alguns minutos.'
                   : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.'
           }}
-          Pode sair desta tela: o pedido continua e aparece em Baralhos quando a proposta estiver pronta.
+          Pode sair desta tela: o pedido continua e aparece em Pedidos quando a proposta estiver pronta.
         </p>
         <button class="botao perigo" @click="acao('cancelar')">Cancelar pedido</button>
       </template>
@@ -208,12 +219,14 @@ onBeforeUnmount(() => clearTimeout(relogio))
       <template v-else-if="g.estado === 'falhou' || g.estado === 'cancelada' || g.estado === 'rejeitada'">
         <div v-if="g.erro" class="aviso erro">{{ g.erro }}</div>
         <div class="linha-acoes acoes">
-          <button class="botao principal" @click="acao('refazer')">Pedir de novo</button>
+          <button v-if="g.pode_refazer" class="botao principal" @click="acao('refazer')">Pedir de novo</button>
+          <button class="botao perigo" @click="excluir">Excluir</button>
         </div>
       </template>
 
-      <p v-else-if="g.estado === 'concluida'" class="acoes">
+      <p v-else-if="g.estado === 'concluida'" class="linha-acoes acoes">
         <a class="botao principal" :href="`#/baralho/${g.resultado}`">Abrir o baralho</a>
+        <button class="botao perigo" @click="excluir">Excluir</button>
       </p>
 
       <template v-else-if="g.estado === 'em_revisao'">
@@ -279,7 +292,8 @@ onBeforeUnmount(() => clearTimeout(relogio))
                   : `Criar baralho com ${escolhidos.length} ${escolhidos.length === 1 ? 'cartão' : 'cartões'}`
             }}
           </button>
-          <button class="botao perigo" :disabled="enviando" @click="acao('descartar')">Descartar</button>
+          <button v-if="g.pode_refazer" class="botao" :disabled="enviando" @click="acao('refazer')">Refazer</button>
+          <button class="botao perigo" :disabled="enviando" @click="excluir">Excluir</button>
         </div>
       </template>
     </template>

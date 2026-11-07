@@ -56,6 +56,16 @@ type geracao struct {
 	CriadoEm    string    `json:"criado_em"`
 	IniciadoEm  string    `json:"iniciado_em"`
 	TerminadoEm string    `json:"terminado_em"`
+	// PodeRefazer: o pedido passou (ou passa) pela IA; um link com até 3 frases prontas não.
+	PodeRefazer bool `json:"pode_refazer"`
+}
+
+func (g *geracao) podeRefazer() bool {
+	if g.Origem != "link" {
+		return true
+	}
+	var p paginaDoLink
+	return json.Unmarshal([]byte(g.Texto), &p) == nil && (p.Texto != "" || len(p.Frases) > exemplosPorPagina)
 }
 
 type proposta struct {
@@ -449,7 +459,32 @@ func (a *app) responderGeracao(w http.ResponseWriter, r *http.Request, status in
 		falha(w, err)
 		return
 	}
+	g.PodeRefazer = g.podeRefazer()
 	writeJSON(w, status, g)
+}
+
+// handleExcluirGeracao apaga o pedido, em qualquer estado (rodando, a IA é parada antes). Os
+// cartões de um pedido já aprovado continuam no baralho.
+func (a *app) handleExcluirGeracao(w http.ResponseWriter, r *http.Request) {
+	id, ok := idDaGeracao(w, r)
+	if !ok {
+		return
+	}
+	a.fila.mu.Lock()
+	if a.fila.atual == id && a.fila.cancelar != nil {
+		a.fila.cancelar()
+	}
+	a.fila.mu.Unlock()
+	res, err := a.db.ExecContext(r.Context(), `DELETE FROM geracoes WHERE id = ?`, id)
+	if err != nil {
+		falha(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		erroJSON(w, http.StatusNotFound, "Pedido não encontrado.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleAcaoGeracao: cancelar (na fila ou rodando), refazer e descartar (a proposta).
@@ -492,12 +527,9 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Um link só é refeito quando passou pela IA (a página tinha mais de 3 frases, ou não as mostrava prontas).
-		if g, err := a.geracao(ctx, id); err == nil && g.Origem == "link" {
-			var p paginaDoLink
-			if json.Unmarshal([]byte(g.Texto), &p) != nil || (p.Texto == "" && len(p.Frases) <= exemplosPorPagina) {
-				erroJSON(w, http.StatusConflict, "Este link não passou pela IA: não há o que refazer.")
-				return
-			}
+		if g, err := a.geracao(ctx, id); err == nil && !g.podeRefazer() {
+			erroJSON(w, http.StatusConflict, "Este link não passou pela IA: não há o que refazer.")
+			return
 		}
 		// Um pedido aprovado num baralho novo passa a mirar esse baralho (se ele ainda existir).
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '',
