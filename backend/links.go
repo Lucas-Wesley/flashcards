@@ -263,6 +263,17 @@ func textoDaPagina(pagina *html.Node, endereco *url.URL) (string, []string) {
 	return texto, audios
 }
 
+// falaDePhrasalVerb: o título ou o <h1> da página diz que ela explica um phrasal verb ("Shoot Up | O que
+// significa este phrasal verb?"). Vale quando a IA não roda; quando roda, quem decide é ela.
+func falaDePhrasalVerb(pagina *html.Node) bool {
+	for _, nome := range []string{"title", "h1"} {
+		if e := buscarElemento(pagina, nome); e != nil && strings.Contains(strings.ToLower(limparEspacos(textoDe(e))), "phrasal verb") {
+			return true
+		}
+	}
+	return false
+}
+
 func buscarElemento(n *html.Node, nome string) *html.Node {
 	if n.Type == html.ElementNode && n.Data == nome {
 		return n
@@ -321,7 +332,7 @@ func lerLink(ctx context.Context, endereco string) (paginaDoLink, error) {
 		return paginaDoLink{}, err
 	}
 	titulo, frases := lerFrasesComTraducao(pagina, res.Request.URL)
-	p := paginaDoLink{Titulo: titulo, Total: len(frases), Frases: frases}
+	p := paginaDoLink{Titulo: titulo, Total: len(frases), Frases: frases, PhrasalVerb: falaDePhrasalVerb(pagina)}
 	if len(frases) == 0 {
 		p.Texto, p.Audios = textoDaPagina(pagina, res.Request.URL)
 		if len([]rune(p.Texto)) < 20 {
@@ -425,16 +436,22 @@ type paginaDoLink struct {
 	// Sem frases com tradução: o texto da página e os áudios dela, na ordem das marcas [áudio N].
 	Texto  string   `json:"texto,omitempty"`
 	Audios []string `json:"audios,omitempty"`
+	// PhrasalVerb: a expressão da página é um phrasal verb; os cartões ganham a tag phrasal-verb.
+	PhrasalVerb bool `json:"phrasal_verb,omitempty"`
 }
 
 func (p paginaDoLink) proposta(frases []fraseDeExemplo, motivo string) proposta {
 	r := proposta{NomeBaralho: p.Titulo}
+	tags := slug(p.Titulo)
+	if p.PhrasalVerb {
+		tags = strings.TrimSpace(tags + " phrasal-verb")
+	}
 	comAudio := 0
 	for _, f := range frases {
 		if f.Audio != "" {
 			comAudio++
 		}
-		r.Cartoes = append(r.Cartoes, cartaoProposto{Frente: f.Ingles, Verso: f.Traducao, Tags: slug(p.Titulo), AudioURL: f.Audio})
+		r.Cartoes = append(r.Cartoes, cartaoProposto{Frente: f.Ingles, Verso: f.Traducao, Tags: tags, AudioURL: f.Audio})
 	}
 	audio := fmt.Sprintf("%d com áudio", comAudio)
 	if comAudio == len(frases) && comAudio > 0 {
@@ -458,13 +475,13 @@ func (p paginaDoLink) proposta(frases []fraseDeExemplo, motivo string) proposta 
 }
 
 const esquemaEscolha = `{"type":"object","properties":{` +
-	`"escolhidas":{"type":"array","items":{"type":"integer"}},"motivo":{"type":"string"}},` +
-	`"required":["escolhidas","motivo"]}`
+	`"escolhidas":{"type":"array","items":{"type":"integer"}},"phrasal_verb":{"type":"boolean"},"motivo":{"type":"string"}},` +
+	`"required":["escolhidas","phrasal_verb","motivo"]}`
 
 const esquemaExtracao = `{"type":"object","properties":{` +
 	`"exemplos":{"type":"array","items":{"type":"object","properties":{` +
 	`"ingles":{"type":"string"},"traducao":{"type":"string"},"audio":{"type":"integer"}},"required":["ingles","traducao","audio"]}},` +
-	`"motivo":{"type":"string"}},"required":["exemplos","motivo"]}`
+	`"phrasal_verb":{"type":"boolean"},"motivo":{"type":"string"}},"required":["exemplos","phrasal_verb","motivo"]}`
 
 func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*proposta, error) {
 	var p paginaDoLink
@@ -482,7 +499,8 @@ func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*
 		pasta: pasta,
 		regra: "escolher-exemplos.md",
 		instrucao: fmt.Sprintf("Página sobre %q (%s). Ela tem estas frases de exemplo, numeradas (inglês e tradução):\n\n%s\n"+
-			"Escolha as %d mais didáticas para virarem flashcards. Devolva os números delas em escolhidas e, em motivo, uma frase curta dizendo o critério.",
+			"Escolha as %d mais didáticas para virarem flashcards. Devolva os números delas em escolhidas; em phrasal_verb, se a expressão da página é um phrasal verb; "+
+			"e, em motivo, uma frase curta dizendo o critério.",
 			p.Titulo, g.Pedido, lista.String(), exemplosPorPagina),
 		esquema:     esquemaEscolha,
 		semInternet: true,
@@ -491,8 +509,9 @@ func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*
 		return nil, err
 	}
 	var escolha struct {
-		Escolhidas []int  `json:"escolhidas"`
-		Motivo     string `json:"motivo"`
+		Escolhidas  []int  `json:"escolhidas"`
+		PhrasalVerb bool   `json:"phrasal_verb"`
+		Motivo      string `json:"motivo"`
 	}
 	if err := dadosDaResposta(r, &escolha); err != nil {
 		return nil, err
@@ -513,6 +532,7 @@ func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*
 	if len(frases) == 0 {
 		return nil, errors.New("a IA não escolheu nenhuma frase da página")
 	}
+	p.PhrasalVerb = escolha.PhrasalVerb
 	pr := p.proposta(frases, escolha.Motivo)
 	return &pr, nil
 }
@@ -535,7 +555,7 @@ func (a *app) extrairExemplos(ctx context.Context, g *geracao, p paginaDoLink, p
 		regra: "extrair-exemplos.md",
 		instrucao: fmt.Sprintf("Página %q (%s). O texto dela vem pela entrada; os negritos estão marcados com **. %s%s\n\n"+
 			"Tire até %d frases de exemplo em inglês, as mais didáticas, com a tradução. Em audio, o número N do [áudio N] daquela frase, ou 0. "+
-			"Em motivo, uma frase curta dizendo o critério.",
+			"Em phrasal_verb, se a expressão que a página explica é um phrasal verb. Em motivo, uma frase curta dizendo o critério.",
 			p.Titulo, g.Pedido, audios, existentes, exemplosPorPagina),
 		entrada:     p.Texto,
 		esquema:     esquemaExtracao,
@@ -550,7 +570,8 @@ func (a *app) extrairExemplos(ctx context.Context, g *geracao, p paginaDoLink, p
 			Traducao string `json:"traducao"`
 			Audio    int    `json:"audio"`
 		} `json:"exemplos"`
-		Motivo string `json:"motivo"`
+		PhrasalVerb bool   `json:"phrasal_verb"`
+		Motivo      string `json:"motivo"`
 	}
 	if err := dadosDaResposta(r, &extracao); err != nil {
 		return nil, err
@@ -571,6 +592,7 @@ func (a *app) extrairExemplos(ctx context.Context, g *geracao, p paginaDoLink, p
 	if len(frases) == 0 {
 		return nil, errors.New("a IA não achou frases de exemplo nesta página")
 	}
+	p.PhrasalVerb = extracao.PhrasalVerb
 	pr := p.proposta(frases, extracao.Motivo)
 	return &pr, nil
 }

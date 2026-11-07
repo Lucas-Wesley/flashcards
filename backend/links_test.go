@@ -55,7 +55,7 @@ func TestCartoesDeUmLink(t *testing.T) {
 		t.Fatalf("proposta do link: %+v", g)
 	}
 	c := g.Proposta.Cartoes[0]
-	if c.Frente != "I ran into an old friend yesterday." || c.Tags != "run-into" || !strings.HasSuffix(c.AudioURL, "/audio/01-ran-into.mp3?t=1") {
+	if c.Frente != "I ran into an old friend yesterday." || c.Tags != "run-into phrasal-verb" || !strings.HasSuffix(c.AudioURL, "/audio/01-ran-into.mp3?t=1") {
 		t.Fatalf("cartão: %+v", c)
 	}
 	if !strings.Contains(g.Proposta.Observacoes, "3 frases de exemplo de “Run Into”, 2 com áudio") {
@@ -127,7 +127,7 @@ func TestLinkComMuitasFrasesAIAEscolheAsMaisDidaticas(t *testing.T) {
 		t.Fatalf("escolhidas: %v", frentes)
 	}
 	c := g.Proposta.Cartoes[1]
-	if c.Verso != "Exemplo 5 disparou." || !strings.HasSuffix(c.AudioURL, "/audio/05.mp3") || c.Tags != "shoot-up" || g.Proposta.NomeBaralho != "Shoot Up" {
+	if c.Verso != "Exemplo 5 disparou." || !strings.HasSuffix(c.AudioURL, "/audio/05.mp3") || c.Tags != "shoot-up phrasal-verb" || g.Proposta.NomeBaralho != "Shoot Up" {
 		t.Errorf("cartão: %+v / %q", c, g.Proposta.NomeBaralho)
 	}
 	obs := g.Proposta.Observacoes

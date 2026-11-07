@@ -18,7 +18,12 @@ Você **não escreve nem muda** nada: as frases, as traduções e os áudios ent
 - Entre duas frases equivalentes, prefira a mais curta e a que tem áudio se a tradução indicar que só uma tem.
 - Uma frase cuja tradução traz uma nota útil (um uso, uma diferença) conta a favor.
 
+## Phrasal verb
+
+Em `phrasal_verb`, diga se a expressão que a página explica é um **phrasal verb**: um verbo com uma ou duas partículas (advérbio ou preposição) que juntos têm um sentido próprio, como *shoot up*, *run into*, *give up*, *look forward to*. Expressões idiomáticas (*break the ice*), palavras soltas e verbos com preposição sem sentido novo (*listen to*) não são. Com `true`, os cartões ganham a tag `phrasal-verb`.
+
 ## A resposta
 
 - `escolhidas`: os números das 3 frases, na ordem que quiser.
+- `phrasal_verb`: `true` ou `false` (ver acima).
 - `motivo`: uma frase curta sobre o critério (por exemplo: "uma de cada sentido: subir de preço, crescer, disparar").

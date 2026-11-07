@@ -21,7 +21,12 @@ O Lucas está aprendendo inglês com frases de exemplo. Ele mandou o link de uma
 
 O texto marca cada áudio da página como `[áudio N]`, no lugar onde ele aparece. Em `audio`, ponha o N do áudio que é a pronúncia **daquela frase** (em geral, a marca logo depois dela). Na dúvida, ou sem áudio, ponha 0: um áudio errado atrapalha mais que nenhum.
 
+## Phrasal verb
+
+Em `phrasal_verb`, diga se a expressão que a página explica é um **phrasal verb**: um verbo com uma ou duas partículas (advérbio ou preposição) que juntos têm um sentido próprio, como *shoot up*, *run into*, *give up*, *look forward to*. Expressões idiomáticas (*break the ice*), palavras soltas e verbos com preposição sem sentido novo (*listen to*) não são. Com `true`, os cartões ganham a tag `phrasal-verb`.
+
 ## A resposta
 
 - `exemplos`: até 3 itens, cada um com `ingles`, `traducao` e `audio`.
+- `phrasal_verb`: `true` ou `false` (ver acima).
 - `motivo`: uma frase curta sobre o critério (por exemplo: "as três frases de exemplo do post, uma de cada sentido").

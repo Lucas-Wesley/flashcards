@@ -18,11 +18,11 @@ case "$prompt" in *"REGRA EDITADA"*) obs="$obs Seguiu a instrução editada." ;;
 case "$prompt" in *"Ele já tem estes cartões"*) obs="$obs Recebeu os cartões existentes." ;; esac
 case "$prompt" in *"PEDIDO EDITADO"*) obs="$obs Recebeu o pedido editado." ;; esac
 case "$prompt" in *"Escolha as 3 mais didáticas"*)
-  printf '{"type":"result","result":"","is_error":false,"structured_output":{"escolhidas":[5,2,99,2,6],"motivo":"Uma de cada situação. %s"}}\n' "$obs"; exit 0 ;; esac
+  printf '{"type":"result","result":"","is_error":false,"structured_output":{"escolhidas":[5,2,99,2,6],"phrasal_verb":true,"motivo":"Uma de cada situação. %s"}}\n' "$obs"; exit 0 ;; esac
 entrada=$(cat)
 case "$prompt" in *"Tire até 3 frases de exemplo"*)
   case "$entrada" in *"[áudio 1]"*) [[ "$entrada" != *"Menu do site"* && "$entrada" != *"não é texto"* ]] && obs="$obs Recebeu o texto da página." ;; esac
-  printf '{"type":"result","result":"","is_error":false,"structured_output":{"exemplos":[{"ingles":"**He told a joke to break the ice.**","traducao":"Ele contou uma piada para quebrar o gelo.","audio":1},{"ingles":"Let us break the ice.","traducao":"Vamos quebrar o gelo.","audio":7},{"ingles":"","traducao":"vazia","audio":0}],"motivo":"%s"}}\n' "$obs"; exit 0 ;; esac
+  printf '{"type":"result","result":"","is_error":false,"structured_output":{"exemplos":[{"ingles":"**He told a joke to break the ice.**","traducao":"Ele contou uma piada para quebrar o gelo.","audio":1},{"ingles":"Let us break the ice.","traducao":"Vamos quebrar o gelo.","audio":7},{"ingles":"","traducao":"vazia","audio":0}],"phrasal_verb":false,"motivo":"%s"}}\n' "$obs"; exit 0 ;; esac
 case "$entrada" in *"<texto>"*"TEXTO DO ACERVO"*"</texto>"*) obs="$obs Recebeu o texto pela entrada." ;; esac
 case "$prompt" in *"Capítulos do texto (para o campo secao): \"Governo Lula\""*) obs="$obs Recebeu os capítulos." ;; esac
 case "$prompt" in *"gerar-do-texto"*|*"cartões de um texto do Acervo"*) obs="$obs Seguiu a instrução do texto." ;; esac
