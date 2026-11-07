@@ -17,6 +17,10 @@ defineProps({ nome: { type: String, required: true } })
       <rect x="4" y="7" width="13" height="13" rx="2" />
       <path d="M7.5 4H18a2 2 0 012 2v10.5" />
     </template>
+    <template v-else-if="nome === 'pedidos'">
+      <path d="M4 13.5L6.5 5.5h11l2.5 8v5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5z" />
+      <path d="M4 13.5h4.5l1 2h5l1-2H20" />
+    </template>
     <template v-else-if="nome === 'ajustes'">
       <path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9" />
       <circle cx="15" cy="7.5" r="2" />

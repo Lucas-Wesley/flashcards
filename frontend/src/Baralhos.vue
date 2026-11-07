@@ -1,33 +1,10 @@
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from './api.js'
 
-const recado = inject('recado')
+// Só os baralhos e o Estudar. Criar um baralho fica em Adicionar; os pedidos à IA, em Pedidos.
 const baralhos = ref(null)
 const erro = ref('')
-const nome = ref('')
-const criando = ref(false)
-const geracoes = ref([])
-let relogio
-
-// Pedidos à IA que ainda pedem atenção: na fila, rodando, para revisar ou com erro.
-const ESTADOS = { na_fila: 'Na fila', rodando: 'Montando…', em_revisao: 'Para revisar', falhou: 'Falhou' }
-const pedidos = computed(() => geracoes.value.filter((g) => ESTADOS[g.estado]))
-
-async function carregarGeracoes() {
-  try {
-    geracoes.value = await api('/api/geracoes')
-  } catch {
-    // Sem rede, a seção some; os baralhos já mostram o aviso.
-  }
-  clearTimeout(relogio)
-  if (geracoes.value.some((g) => g.estado === 'na_fila' || g.estado === 'rodando')) {
-    relogio = setTimeout(() => {
-      carregarGeracoes()
-      carregar()
-    }, 4000)
-  }
-}
 
 async function carregar() {
   try {
@@ -38,30 +15,11 @@ async function carregar() {
   }
 }
 
-async function criar() {
-  if (!nome.value.trim()) return
-  criando.value = true
-  try {
-    const b = await api('/api/baralhos', { metodo: 'POST', corpo: { nome: nome.value } })
-    nome.value = ''
-    recado(`Baralho “${b.nome}” criado.`)
-    await carregar()
-  } catch (e) {
-    recado(e.message, true)
-  } finally {
-    criando.value = false
-  }
-}
-
 const total = (b) => b.contagem.novos + b.contagem.aprendendo + b.contagem.revisar
 // O "Estudar" do topo junta todos os baralhos numa fila só.
 const totalGeral = computed(() => (baralhos.value || []).reduce((soma, b) => soma + total(b), 0))
 
-onMounted(() => {
-  carregar()
-  carregarGeracoes()
-})
-onBeforeUnmount(() => clearTimeout(relogio))
+onMounted(carregar)
 </script>
 
 <template>
@@ -80,19 +38,6 @@ onBeforeUnmount(() => clearTimeout(relogio))
     </div>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
-
-    <template v-if="pedidos.length">
-      <p class="rotulo primeiro">Pedidos à IA</p>
-      <ul class="lista pedidos">
-        <li v-for="g in pedidos" :key="g.id">
-          <a class="pedido" :href="`#/geracao/${g.id}`">
-            <span class="texto-pedido">{{ g.pedido }}</span>
-            <span class="chip" :class="{ andando: g.estado !== 'falhou', erro: g.estado === 'falhou' }">{{ ESTADOS[g.estado] }}</span>
-          </a>
-        </li>
-      </ul>
-      <p class="rotulo">Seus baralhos</p>
-    </template>
 
     <template v-if="baralhos">
       <ul v-if="baralhos.length" class="lista">
@@ -113,18 +58,14 @@ onBeforeUnmount(() => clearTimeout(relogio))
           <a v-if="total(b)" class="botao estudar" :href="`#/estudar/${b.id}`">Estudar</a>
         </li>
       </ul>
-      <p v-else class="vazio">Nenhum baralho ainda.<br />Crie o primeiro abaixo: um por assunto, como “Inglês” ou “História”.</p>
+      <p v-else class="vazio">
+        Nenhum baralho ainda.<br />
+        <a href="#/novo-baralho">Crie o primeiro</a>, um por assunto, como “Inglês” ou “História”, ou <a href="#/gerar">peça à IA</a> um pronto.
+      </p>
 
       <p v-if="baralhos.length" class="legenda">
         <span class="numero novos">Novos</span> · <span class="numero aprendendo">Aprendendo</span> · <span class="numero revisar">Para revisar</span>
       </p>
-
-      <p class="rotulo">Novo baralho</p>
-      <form class="novo" @submit.prevent="criar">
-        <input v-model="nome" class="campo" placeholder="Nome do baralho" aria-label="Nome do novo baralho" />
-        <button class="botao" :disabled="criando || !nome.trim()">Criar vazio</button>
-      </form>
-      <p class="gerar">ou <a href="#/gerar">peça à IA um baralho pronto</a> sobre um assunto, para revisar antes de estudar.</p>
     </template>
   </div>
 </template>
@@ -236,57 +177,6 @@ onBeforeUnmount(() => clearTimeout(relogio))
 .legenda .numero {
   font-size: inherit;
   font-weight: 500;
-}
-
-.rotulo.primeiro {
-  margin-top: 0;
-}
-
-.pedidos {
-  margin-bottom: 8px;
-}
-
-.pedido {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  min-width: 0;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.texto-pedido {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pedido .chip {
-  flex-shrink: 0;
-}
-
-.pedido:hover .texto-pedido {
-  color: var(--azul);
-}
-
-.gerar {
-  margin: 10px 0 0;
-  color: var(--texto-suave);
-  font-size: 0.85rem;
-}
-
-.novo {
-  display: flex;
-  gap: 8px;
-}
-
-.novo .botao {
-  min-height: 38px;
 }
 
 .aviso {

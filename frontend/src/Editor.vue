@@ -150,7 +150,7 @@ onMounted(carregar)
 
     <p v-else-if="!editando && !baralhos.length" class="vazio">
       Crie um baralho antes de adicionar cartões.<br />
-      <a href="#/baralhos">Ir para Baralhos</a>
+      <a href="#/novo-baralho">Criar um baralho</a>
     </p>
 
     <form v-else class="formulario" @submit.prevent="salvar" @keydown="aoTeclar">

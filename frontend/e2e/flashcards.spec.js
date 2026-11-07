@@ -6,9 +6,10 @@ test.describe.configure({ mode: 'serial' })
 test('cria o baralho, adiciona cartões e importa uma lista', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('Nenhum baralho ainda.')).toBeVisible()
+  await page.getByRole('link', { name: 'Crie o primeiro' }).click()
+  await expect(page.getByRole('link', { name: 'Baralho novo' })).toHaveAttribute('aria-current', 'page')
   await page.getByLabel('Nome do novo baralho').fill('Inglês')
-  await page.getByRole('button', { name: 'Criar vazio' }).click()
-  await page.getByRole('link', { name: /Inglês/ }).first().click()
+  await page.getByRole('button', { name: 'Criar baralho' }).click()
   await expect(page.getByRole('heading', { name: 'Inglês' })).toBeVisible()
 
   await page.getByRole('link', { name: 'Adicionar cartões' }).click()
@@ -107,13 +108,20 @@ test('monta cartões a partir de um link compartilhado', async ({ page }) => {
 })
 
 test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
+  // A página Baralhos tem só os baralhos; o pedido à IA fica em Adicionar.
   await page.goto('/')
-  await page.getByRole('link', { name: 'peça à IA um baralho pronto' }).click()
+  await expect(page.getByText('Novo baralho')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Adicionar' }).click()
+  await page.getByRole('link', { name: 'Com IA' }).click()
   await page.getByLabel('Pedido').fill('presidentes do Brasil no século 21')
   await page.getByLabel('Quantidade').fill('10')
   await page.getByRole('button', { name: 'Pedir à IA' }).click()
 
   await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
+  // Em Pedidos, a proposta espera a revisão.
+  await page.getByRole('link', { name: 'Pedidos' }).click()
+  await expect(page.getByRole('heading', { name: 'Pedidos' })).toBeVisible()
+  await page.getByRole('link', { name: /presidentes do Brasil no século 21.*Para revisar/ }).click()
   await expect(page.getByText('2 cartões propostos · 2 marcados')).toBeVisible()
   await expect(page.getByLabel('Nome do baralho novo')).toHaveValue('Presidentes do Brasil no século 21')
   await page.getByLabel('Incluir o cartão 2').uncheck()

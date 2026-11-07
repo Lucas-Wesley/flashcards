@@ -1,11 +1,12 @@
 <script setup>
-// As três formas de adicionar cartões, no topo de cada uma.
+// As formas de adicionar cartões (e um baralho novo), no topo de cada uma.
 defineProps({ atual: { type: String, required: true } })
 
 const ABAS = [
   { rota: 'adicionar', nome: 'Escrever' },
   { rota: 'link', nome: 'Do link' },
   { rota: 'gerar', nome: 'Com IA' },
+  { rota: 'novo-baralho', nome: 'Baralho novo' },
 ]
 </script>
 
@@ -20,6 +21,7 @@ const ABAS = [
 <style scoped>
 .abas {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin: -6px 0 22px;
 }

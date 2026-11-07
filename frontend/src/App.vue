@@ -12,6 +12,8 @@ import Icone from './Icone.vue'
 import Importar from './Importar.vue'
 import Instrucao from './Instrucao.vue'
 import Link from './Link.vue'
+import NovoBaralho from './NovoBaralho.vue'
+import Pedidos from './Pedidos.vue'
 import { api } from './api.js'
 
 // Rotas no hash, como na Biblioteca e no Acervo: o "voltar" do celular volta para a tela anterior.
@@ -19,6 +21,7 @@ const hash = ref(location.hash)
 const recado = ref(null) // { texto, erro } — aviso rápido
 const versao = ref('')
 const pendentes = ref(0)
+const pedidosAbertos = ref(0) // propostas para revisar e pedidos que falharam
 
 const rota = computed(() => {
   const h = decodeURIComponent(hash.value.replace(/^#\/?/, ''))
@@ -27,8 +30,9 @@ const rota = computed(() => {
 })
 
 const MENU = [
-  { rota: 'baralhos', nome: 'Baralhos', icone: 'baralhos', contador: true },
+  { rota: 'baralhos', nome: 'Baralhos', icone: 'baralhos', contador: 'estudo' },
   { rota: 'adicionar', nome: 'Adicionar', icone: 'mais' },
+  { rota: 'pedidos', nome: 'Pedidos', icone: 'pedidos', contador: 'pedidos' },
   { rota: 'cartoes', nome: 'Cartões', icone: 'cartoes' },
   { rota: 'ajustes', nome: 'Ajustes', icone: 'ajustes' },
 ]
@@ -36,7 +40,8 @@ const MENU = [
 const secao = computed(() => {
   const n = rota.value.nome
   if (['baralho', 'importar'].includes(n)) return 'baralhos'
-  if (['link', 'gerar', 'geracao'].includes(n)) return 'adicionar'
+  if (['link', 'gerar', 'novo-baralho'].includes(n)) return 'adicionar'
+  if (n === 'geracao') return 'pedidos'
   if (n === 'nota') return 'cartoes'
   return n
 })
@@ -54,17 +59,22 @@ function aoMudarHash() {
   atualizarPendentes()
 }
 
-// O contador do menu: revisões e cartões aprendendo para hoje, somando os baralhos.
+// Os contadores do menu: revisões e cartões aprendendo para hoje, somando os baralhos; e os
+// pedidos que esperam o Lucas (proposta para revisar ou erro).
 let relogio
 async function atualizarPendentes() {
   if (document.visibilityState !== 'visible') return
   try {
-    const baralhos = await api('/api/baralhos', { tempo: 5000 })
+    const [baralhos, geracoes] = await Promise.all([api('/api/baralhos', { tempo: 5000 }), api('/api/geracoes', { tempo: 5000 })])
     pendentes.value = baralhos.reduce((soma, b) => soma + b.contagem.revisar + b.contagem.aprendendo, 0)
+    pedidosAbertos.value = geracoes.filter((g) => g.estado === 'em_revisao' || g.estado === 'falhou').length
   } catch {
-    // Sem rede: o contador fica como estava.
+    // Sem rede: os contadores ficam como estavam.
   }
 }
+
+const contagem = (item) => (item.contador === 'estudo' ? pendentes.value : item.contador === 'pedidos' ? pedidosAbertos.value : 0)
+const rotuloDoContador = (item, n) => (item.contador === 'estudo' ? `${n} para revisar` : `${n} ${n === 1 ? 'pedido espera' : 'pedidos esperam'} você`)
 
 let tempoDoRecado
 function mostrarRecado(texto, erro = false) {
@@ -121,7 +131,7 @@ onBeforeUnmount(() => {
         >
           <Icone :nome="item.icone" />
           <span class="nome">{{ item.nome }}</span>
-          <span v-if="item.contador && pendentes" class="contador" :aria-label="`${pendentes} para revisar`">{{ pendentes }}</span>
+          <span v-if="contagem(item)" class="contador" :aria-label="rotuloDoContador(item, contagem(item))">{{ contagem(item) }}</span>
         </button>
       </nav>
       <div class="rodape">{{ versao ? `versão ${versao.slice(0, 7)}` : 'sem conexão' }}</div>
@@ -137,6 +147,8 @@ onBeforeUnmount(() => {
       <Gerar v-else-if="rota.nome === 'gerar'" :key="'gerar' + rota.param" :baralho="rota.param" />
       <Link v-else-if="rota.nome === 'link'" :key="'link' + rota.param" :link="rota.param" />
       <Geracao v-else-if="rota.nome === 'geracao'" :key="rota.param" :id="rota.param" />
+      <Pedidos v-else-if="rota.nome === 'pedidos'" />
+      <NovoBaralho v-else-if="rota.nome === 'novo-baralho'" />
       <Instrucao v-else-if="rota.nome === 'ajustes' && rota.param.startsWith('instrucoes/')" :key="rota.param" :arquivo="rota.param.slice('instrucoes/'.length)" />
       <Ajustes v-else-if="rota.nome === 'ajustes'" :tela="telaAnterior" />
       <Baralhos v-else />
@@ -288,7 +300,7 @@ nav {
   }
 
   nav {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
 
   .item {

@@ -145,7 +145,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
 <template>
   <div class="pagina">
-    <a class="voltar" :href="doLink ? '#/link' : '#/baralhos'">{{ doLink ? 'Adicionar do link' : 'Baralhos' }}</a>
+    <a class="voltar" href="#/pedidos">Pedidos</a>
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="g">
