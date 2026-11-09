@@ -17,8 +17,8 @@ export default defineConfig({
         name: 'Flashcards',
         short_name: 'Flashcards',
         lang: 'pt-BR',
-        theme_color: '#fbfaf8',
-        background_color: '#fbfaf8',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
         // Android: o Flashcards aparece em "Compartilhar"; o link chega em "/?text=…" (App.vue).

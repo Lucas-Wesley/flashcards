@@ -211,7 +211,7 @@ onMounted(async () => {
 }
 
 .valor.revisar {
-  color: var(--terracota);
+  color: var(--vermelho);
 }
 
 .cifra .nome {

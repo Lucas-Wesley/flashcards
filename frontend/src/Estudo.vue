@@ -270,7 +270,7 @@ onBeforeUnmount(() => {
 }
 
 .contagem .revisar {
-  color: var(--terracota);
+  color: var(--vermelho);
 }
 
 /* O número da fila do cartão atual fica sublinhado. */
@@ -409,6 +409,6 @@ hr {
 }
 
 .nota.errei {
-  color: var(--terracota);
+  color: var(--vermelho);
 }
 </style>

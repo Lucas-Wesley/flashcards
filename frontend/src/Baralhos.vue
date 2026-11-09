@@ -48,11 +48,13 @@ onMounted(carregar)
               <span class="meta">
                 {{ b.cartoes === 1 ? '1 cartão' : `${b.cartoes} cartões` }}<template v-if="b.feitos_hoje"> · {{ b.feitos_hoje }} {{ b.feitos_hoje === 1 ? 'revisão' : 'revisões' }} hoje</template>
               </span>
-            </span>
-            <span class="numeros" :aria-label="`${b.contagem.novos} novos, ${b.contagem.aprendendo} aprendendo, ${b.contagem.revisar} para revisar`">
-              <span class="numero novos" :class="{ zero: !b.contagem.novos }" title="Novos">{{ b.contagem.novos }}</span>
-              <span class="numero aprendendo" :class="{ zero: !b.contagem.aprendendo }" title="Aprendendo">{{ b.contagem.aprendendo }}</span>
-              <span class="numero revisar" :class="{ zero: !b.contagem.revisar }" title="Para revisar">{{ b.contagem.revisar }}</span>
+              <!-- Cada número com o nome ao lado; os zerados não aparecem. -->
+              <span class="numeros" :aria-label="`${b.contagem.novos} novos, ${b.contagem.aprendendo} aprendendo, ${b.contagem.revisar} para revisar`">
+                <span v-if="b.contagem.novos" class="numero novos">{{ b.contagem.novos }} {{ b.contagem.novos === 1 ? 'novo' : 'novos' }}</span>
+                <span v-if="b.contagem.aprendendo" class="numero aprendendo">{{ b.contagem.aprendendo }} aprendendo</span>
+                <span v-if="b.contagem.revisar" class="numero revisar">{{ b.contagem.revisar }} para revisar</span>
+                <span v-if="!total(b) && b.cartoes" class="nada">Nada para hoje</span>
+              </span>
             </span>
           </a>
           <a v-if="total(b)" class="botao estudar" :href="`#/estudar/${b.id}`">Estudar</a>
@@ -63,9 +65,6 @@ onMounted(carregar)
         <a href="#/novo-baralho">Crie o primeiro</a>, um por assunto, como “Inglês” ou “História”, ou <a href="#/gerar">peça à IA</a> um pronto.
       </p>
 
-      <p v-if="baralhos.length" class="legenda">
-        <span class="numero novos">Novos</span> · <span class="numero aprendendo">Aprendendo</span> · <span class="numero revisar">Para revisar</span>
-      </p>
     </template>
   </div>
 </template>
@@ -118,16 +117,16 @@ onMounted(carregar)
 
 .nome {
   overflow: hidden;
-  font-family: var(--leitura);
-  font-size: 1.19rem;
-  font-weight: 550;
+  font-size: 1.06rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: color 0.15s ease;
 }
 
 .baralho:hover .nome {
-  color: var(--azul);
+  color: var(--marca);
 }
 
 .meta {
@@ -137,46 +136,38 @@ onMounted(carregar)
 
 .numeros {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
   font-variant-numeric: tabular-nums;
 }
 
 .numero {
-  min-width: 2ch;
-  font-size: 0.92rem;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
   font-weight: 600;
-  text-align: right;
 }
 
-/* Novos em azul (informação); revisões vencidas em terracota (pedem atenção). */
+/* Novos em azul (informação); revisões vencidas em vermelho (pedem atenção). */
 .numero.novos {
+  background: var(--azul-fundo);
   color: var(--azul);
 }
 
 .numero.aprendendo {
+  background: var(--superficie-forte);
   color: var(--texto-suave);
 }
 
 .numero.revisar {
-  color: var(--terracota);
+  background: var(--vermelho-fundo);
+  color: var(--vermelho);
 }
 
-.numero.zero {
+.nada {
   color: var(--texto-fraco);
-  font-weight: 400;
-  opacity: 0.6;
-}
-
-.legenda {
-  margin: 10px 0 0;
-  color: var(--texto-fraco);
-  font-size: 0.75rem;
-  text-align: right;
-}
-
-.legenda .numero {
-  font-size: inherit;
-  font-weight: 500;
+  font-size: 0.78rem;
 }
 
 .aviso {
