@@ -174,6 +174,7 @@ test('estuda todos os baralhos misturados pelo botão do topo', async ({ page })
 
 test('edita a instrução da IA e volta ao padrão', async ({ page }) => {
   await page.goto('/#/ajustes')
+  await page.getByRole('link', { name: /Instruções da IA/ }).click()
   await page.getByRole('link', { name: /Gerar um baralho/ }).click()
   await expect(page.locator('article.instrucao')).toContainText('Um fato por cartão')
   await page.getByRole('button', { name: 'Editar' }).click()
@@ -188,6 +189,7 @@ test('edita a instrução da IA e volta ao padrão', async ({ page }) => {
 test('Ajustes recebe sugestões de melhoria', async ({ page }) => {
   await page.goto('/#/cartoes')
   await page.getByRole('button', { name: 'Ajustes' }).click()
+  await page.getByRole('link', { name: /Sugestões de melhoria/ }).click()
   await page.getByLabel('Sugestão de melhoria').fill('Áudio de pronúncia')
   await page.getByRole('button', { name: 'Enviar sugestão' }).click()
   await expect(page.locator('.sugestao', { hasText: 'Áudio de pronúncia' })).toBeVisible()

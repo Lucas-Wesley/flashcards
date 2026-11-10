@@ -5,6 +5,7 @@ defineProps({ nome: { type: String, required: true } })
 <template>
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path v-if="nome === 'voltar'" d="M15 5l-7 7 7 7" />
+    <path v-else-if="nome === 'avancar'" d="M9 5l7 7-7 7" />
     <path v-else-if="nome === 'fechar'" d="M6 6l12 12M18 6L6 18" />
     <path v-else-if="nome === 'mais'" d="M12 5v14M5 12h14" />
     <path v-else-if="nome === 'desfazer'" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" />

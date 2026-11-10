@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
       <Pedidos v-else-if="rota.nome === 'pedidos'" />
       <NovoBaralho v-else-if="rota.nome === 'novo-baralho'" />
       <Instrucao v-else-if="rota.nome === 'ajustes' && rota.param.startsWith('instrucoes/')" :key="rota.param" :arquivo="rota.param.slice('instrucoes/'.length)" />
-      <Ajustes v-else-if="rota.nome === 'ajustes'" :tela="telaAnterior" />
+      <Ajustes v-else-if="rota.nome === 'ajustes'" :tela="telaAnterior" :secao="rota.param" />
       <Baralhos v-else />
     </main>
 
