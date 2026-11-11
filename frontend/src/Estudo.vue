@@ -236,7 +236,7 @@ onBeforeUnmount(() => {
 
     <div v-if="naTV && tv && !tv.telas" class="aviso-tv" role="status">
       <Icone nome="tv" />
-      <span>Na TV, abra o navegador (Internet) em <strong>{{ tv.endereco.replace(/^https?:\/\//, '') }}</strong>. Os cartões aparecem lá; você responde por aqui.</span>
+      <span>Na TV, abra o navegador (Internet) e digite o endereço inteiro, com <strong>http://</strong> no começo: <strong>{{ tv.endereco }}</strong>. Os cartões aparecem lá; você responde por aqui.</span>
     </div>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
