@@ -21,7 +21,8 @@ export default defineConfig({
         {
           command: `rm -rf "${dados}" && go run .`,
           cwd: '../backend',
-          // Claude falso; a Wikipédia aponta para uma porta fechada (cartões sem foto, sem sair da máquina).
+          // Claude falso; a Wikipédia aponta para uma porta fechada, e o Commons responde sempre a mesma
+          // bandeira, do site falso (nada sai da máquina).
           env: {
             DATA_DIR: dados,
             ADDR: ':8095',
@@ -30,6 +31,9 @@ export default defineConfig({
             CLAUDE_BIN: path.join(testdata, 'claude-falso'),
             REGRAS_DIR: path.resolve('../regras'),
             WIKI_API: 'http://127.0.0.1:9/w/api.php',
+            COMMONS_API: 'http://localhost:8096/commons.json',
+            OPENVERSE_API: '',
+            HOSTS_DE_IMAGEM: 'localhost:8096',
           },
           url: 'http://localhost:8095/api/health',
         },

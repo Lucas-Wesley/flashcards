@@ -13,6 +13,10 @@ services:
       NTFY_URL: http://ntfy/flashcards
       CLAUDE_TOKEN_ARQUIVO: /claude/token
       URL_DA_TV: http://192.168.1.20:8453
+      # Falar o pedido à IA (F39): o Whisper large-v3 no Mac mini (homelab/whisper-mac) e, com o Mac
+      # fora, o Whisper do servidor (o mesmo do Acervo).
+      WHISPER_URL: http://192.168.1.160:8000
+      WHISPER_RESERVA_URL: http://whisper:8000
     networks:
       - proxy
 

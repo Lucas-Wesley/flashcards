@@ -140,6 +140,8 @@ type cartaoDeEstudo struct {
 	Verso  string `json:"verso"`
 	Tags   string `json:"tags"`
 	Imagem string `json:"imagem"`
+	// ImagemFrente aparece com a pergunta (F39); no cartão invertido, as imagens trocam de lado com o texto.
+	ImagemFrente string `json:"imagem_frente"`
 	// Audio é da frente da nota (a frase em inglês): toca com a pergunta no sentido normal e com a
 	// resposta no invertido.
 	Audio string `json:"audio"`
@@ -234,14 +236,15 @@ func (a *app) montarEstudo(ctx context.Context, baralhos []baralho, j juntos, fo
 	e.EsperaAte = ""
 	c, b := escolhido, filaEscolhida.b
 	e.Baralho = b
-	var tipo, frente, verso, tags, imagem, audio, fonte string
-	if err := a.db.QueryRowContext(ctx, `SELECT tipo, frente, verso, tags, imagem, audio, fonte FROM notas WHERE id = ?`, c.NotaID).Scan(&tipo, &frente, &verso, &tags, &imagem, &audio, &fonte); err != nil {
+	var tipo, frente, verso, tags, imagem, imagemFrente, audio, fonte string
+	if err := a.db.QueryRowContext(ctx, `SELECT tipo, frente, verso, tags, imagem, imagem_frente, audio, fonte FROM notas WHERE id = ?`, c.NotaID).Scan(&tipo, &frente, &verso, &tags, &imagem, &imagemFrente, &audio, &fonte); err != nil {
 		return e, err
 	}
 	if c.Sentido == 1 {
 		frente, verso = verso, frente
+		imagem, imagemFrente = imagemFrente, imagem
 	}
-	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Tipo: tipo, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Fonte: fonte, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
+	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Tipo: tipo, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, ImagemFrente: imagemFrente, Audio: audio, Fonte: fonte, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
 	var err error
 	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, filaEscolhida.agora)
 	return e, err

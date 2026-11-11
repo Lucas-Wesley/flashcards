@@ -24,7 +24,7 @@ func (a *app) handleAleatorio(w http.ResponseWriter, r *http.Request) {
 	case q.Get("tema") != "":
 		filtro, args = ` AND b.tema = ?`, []any{q.Get("tema")}
 	}
-	rows, err := a.db.QueryContext(r.Context(), `SELECT c.id, c.nota_id, c.sentido, c.estado, n.tipo, n.frente, n.verso, n.tags, n.imagem, n.audio, n.fonte, b.nome
+	rows, err := a.db.QueryContext(r.Context(), `SELECT c.id, c.nota_id, c.sentido, c.estado, n.tipo, n.frente, n.verso, n.tags, n.imagem, n.imagem_frente, n.audio, n.fonte, b.nome
 		FROM cartoes c JOIN notas n ON n.id = c.nota_id JOIN baralhos b ON b.id = c.baralho_id
 		WHERE c.suspenso = 0`+filtro+` ORDER BY RANDOM() LIMIT ?`, append(args, sorteadosPorVez)...)
 	if err != nil {
@@ -35,12 +35,13 @@ func (a *app) handleAleatorio(w http.ResponseWriter, r *http.Request) {
 	lista := []cartaoSorteado{}
 	for rows.Next() {
 		var c cartaoSorteado
-		if err := rows.Scan(&c.ID, &c.NotaID, &c.Sentido, &c.Estado, &c.Tipo, &c.Frente, &c.Verso, &c.Tags, &c.Imagem, &c.Audio, &c.Fonte, &c.Baralho); err != nil {
+		if err := rows.Scan(&c.ID, &c.NotaID, &c.Sentido, &c.Estado, &c.Tipo, &c.Frente, &c.Verso, &c.Tags, &c.Imagem, &c.ImagemFrente, &c.Audio, &c.Fonte, &c.Baralho); err != nil {
 			falha(w, err)
 			return
 		}
 		if c.Sentido == 1 {
 			c.Frente, c.Verso = c.Verso, c.Frente
+			c.Imagem, c.ImagemFrente = c.ImagemFrente, c.Imagem
 		}
 		lista = append(lista, c)
 	}

@@ -36,6 +36,7 @@ func newServer(a *app, web fs.FS, version string) http.Handler {
 
 	mux.HandleFunc("GET /api/geracoes", a.handleGeracoes)
 	mux.HandleFunc("POST /api/geracoes", a.handlePedirGeracao)
+	mux.HandleFunc("POST /api/transcrever", a.handleTranscrever)
 	mux.HandleFunc("GET /api/geracoes/{id}", a.handleGeracao)
 	mux.HandleFunc("POST /api/geracoes/{id}/aprovar", a.handleAprovar)
 	mux.HandleFunc("POST /api/geracoes/{id}/{acao}", a.handleAcaoGeracao)

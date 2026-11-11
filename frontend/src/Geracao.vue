@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
+import Microfone from './Microfone.vue'
 import { api } from './api.js'
 import { contextoDoCartao, termoDaBusca } from './busca.js'
 import { doLivro } from './fonte.js'
@@ -10,6 +11,8 @@ import { doLivro } from './fonte.js'
 // O pedido à IA pode ser editado e refeito depois de terminar, mesmo aprovado: aí a IA trabalha no
 // baralho criado, e os cartões que voltarem com a mesma frente atualizam os que já existem.
 // O baralho de destino pode ser trocado na revisão; um link sem baralho começa no "Inglês".
+// Na revisão, cada cartão aparece como no estudo (F39: a imagem da frente, a frente, o verso e a
+// imagem do verso); os campos só abrem em "Editar".
 const props = defineProps({ id: { type: String, required: true } })
 const recado = inject('recado')
 
@@ -17,13 +20,14 @@ const g = ref(null)
 const erro = ref('')
 const nome = ref('')
 const cartoes = ref([]) // cópia editável da proposta, com "incluir"
-const buscandoEm = ref(-1) // índice do cartão com a busca de imagem aberta
+const buscandoEm = ref(null) // { i, lado }: o cartão e o lado ('frente' ou 'verso') com a busca de imagem aberta
+const editandoCartao = ref(-1)
 const baralhos = ref([])
 const destino = ref('') // id do baralho, ou '' para um novo
 const enviando = ref(false)
 const editando = ref(false)
 const novoPedido = ref('')
-const novaQuantidade = ref(20)
+const novaQuantidade = ref('')
 let relogio
 
 const NOMES = {
@@ -54,6 +58,7 @@ async function carregar() {
     if (g.value.estado === 'em_revisao' && anterior !== 'em_revisao') {
       nome.value = g.value.proposta.nome_baralho
       cartoes.value = g.value.proposta.cartoes.map((c) => ({ ...c, incluir: true }))
+      editandoCartao.value = -1
       await carregarBaralhos()
     }
   } catch (e) {
@@ -123,9 +128,26 @@ async function aprovar() {
 
 function editar() {
   novoPedido.value = g.value.pedido
-  novaQuantidade.value = g.value.quantidade
+  novaQuantidade.value = g.value.quantidade || ''
   editando.value = true
 }
+
+function ouvido(texto) {
+  novoPedido.value = novoPedido.value.trim() ? `${novoPedido.value.trim()} ${texto}` : texto
+}
+
+const todosMarcados = computed(() => cartoes.value.length > 0 && escolhidos.value.length === cartoes.value.length)
+function marcarTodos() {
+  const marcar = !todosMarcados.value
+  cartoes.value.forEach((c) => (c.incluir = marcar))
+}
+
+// A quantidade do pedido: em branco (0), a IA decidiu.
+const textoDaQuantidade = computed(() => {
+  if (doLink.value) return ''
+  if (doAcervo.value) return `até ${g.value.quantidade} · `
+  return g.value.quantidade ? `cerca de ${g.value.quantidade} · ` : ''
+})
 
 async function refazer() {
   if (!novoPedido.value.trim()) return
@@ -134,7 +156,7 @@ async function refazer() {
   try {
     g.value = await api(`/api/geracoes/${props.id}/refazer`, {
       metodo: 'POST',
-      corpo: { pedido: novoPedido.value, quantidade: Number(novaQuantidade.value) },
+      corpo: { pedido: novoPedido.value, quantidade: Number(novaQuantidade.value) || 0 },
     })
     editando.value = false
     cartoes.value = []
@@ -146,9 +168,15 @@ async function refazer() {
   }
 }
 
-function trocarImagem(i, achada) {
-  cartoes.value[i].imagem_url = achada.url
-  buscandoEm.value = -1
+function trocarImagem(achada) {
+  const { i, lado } = buscandoEm.value
+  cartoes.value[i][lado === 'frente' ? 'imagem_frente_url' : 'imagem_url'] = achada.url
+  buscandoEm.value = null
+}
+
+const buscandoNo = (i, lado) => buscandoEm.value?.i === i && buscandoEm.value?.lado === lado
+function abrirBusca(i, lado) {
+  buscandoEm.value = buscandoNo(i, lado) ? null : { i, lado }
 }
 
 const hora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')
@@ -171,17 +199,20 @@ onBeforeUnmount(() => clearTimeout(relogio))
         <button v-if="!trabalhando && g.estado !== 'em_revisao'" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
       </p>
       <form v-else-if="editando" class="edicao" @submit.prevent="refazer">
-        <textarea
-          v-model="novoPedido"
-          class="campo"
-          rows="4"
-          aria-label="Pedido"
-          @keydown.ctrl.enter="refazer"
-          @keydown.meta.enter="refazer"
-        />
+        <div class="caixa">
+          <textarea
+            v-model="novoPedido"
+            class="campo"
+            rows="4"
+            aria-label="Pedido"
+            @keydown.ctrl.enter="refazer"
+            @keydown.meta.enter="refazer"
+          />
+          <Microfone class="falar" @texto="ouvido" />
+        </div>
         <label class="quantos">
-          <span class="rotulo-campo">Quantos cartões, mais ou menos</span>
-          <input v-model="novaQuantidade" class="campo" type="number" min="1" max="100" aria-label="Quantidade" />
+          <span class="rotulo-campo">Quantos cartões (opcional)</span>
+          <input v-model="novaQuantidade" class="campo" type="number" min="1" max="300" placeholder="A IA decide" aria-label="Quantidade" />
         </label>
         <p v-if="g.estado === 'concluida'" class="suave dica">
           A IA trabalha no baralho que já foi criado. Os cartões que ela devolver com a mesma frente atualizam os que existem, sem perder o
@@ -200,7 +231,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
         }}</span>
-        <template v-if="doAcervo">até {{ g.quantidade }} · </template><template v-else-if="!doLink">cerca de {{ g.quantidade }} · </template>{{ g.tipo === 'invertido' ? 'nos dois sentidos' : g.tipo === 'leitura' ? 'de leitura' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
+        {{ textoDaQuantidade }}{{ g.tipo === 'invertido' ? 'nos dois sentidos' : g.tipo === 'leitura' ? 'de leitura' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
       </p>
 
       <template v-if="trabalhando">
@@ -235,6 +266,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
       </p>
 
       <template v-else-if="g.estado === 'em_revisao'">
+        <p v-if="g.proposta.entendimento" class="entendimento"><span class="rotulo-campo">A IA entendeu</span>{{ g.proposta.entendimento }}</p>
         <div v-if="g.proposta.observacoes" class="aviso observacoes"><strong v-if="!doLink">Da IA: </strong>{{ g.proposta.observacoes }}</div>
 
         <div class="destino">
@@ -251,36 +283,67 @@ onBeforeUnmount(() => clearTimeout(relogio))
             <input v-model="nome" class="campo" aria-label="Nome do baralho novo" />
           </label>
         </div>
-        <p v-if="destino" class="suave">
-          Os cartões de mesma frente atualizam os que já estão no baralho, sem perder o histórico.<template v-if="atualizacoes">
-            {{ atualizacoes === 1 ? '1 já existe e vai ser atualizado.' : `${atualizacoes} já existem e vão ser atualizados.` }}</template
-          >
+        <p v-if="atualizacoes" class="suave">
+          {{ atualizacoes === 1 ? '1 cartão já existe no baralho e vai ser atualizado' : `${atualizacoes} cartões já existem no baralho e vão ser atualizados` }}, sem perder o histórico.
         </p>
 
-        <p class="rotulo">{{ cartoes.length }} cartões propostos · {{ escolhidos.length }} marcados</p>
+        <div class="contagem">
+          <p class="rotulo">{{ escolhidos.length }} de {{ cartoes.length }} {{ cartoes.length === 1 ? 'cartão marcado' : 'cartões marcados' }}</p>
+          <button v-if="cartoes.length > 1" type="button" class="botao-link" @click="marcarTodos">{{ todosMarcados ? 'Desmarcar todos' : 'Marcar todos' }}</button>
+        </div>
         <ul class="lista">
           <li v-for="(c, i) in cartoes" :key="i" class="proposto" :class="{ fora: !c.incluir }">
             <input v-model="c.incluir" type="checkbox" class="marcar" :aria-label="`Incluir o cartão ${i + 1}`" />
             <div class="campos">
-              <span v-if="c.atualiza" class="chip atualiza">Atualiza o cartão que já existe</span>
-              <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : 'Texto no Acervo') }}</a>
-              <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
-              <textarea v-model="c.verso" class="campo texto-cartao" :rows="g.tipo === 'leitura' ? 10 : 2" :aria-label="`Verso do cartão ${i + 1}`" />
-              <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />
-              <div v-if="c.audio_url" class="audio">
-                <audio controls preload="none" :src="c.audio_url" :aria-label="`Áudio do cartão ${i + 1}`" />
-                <button type="button" class="botao" @click="c.audio_url = ''">Sem áudio</button>
+              <div v-if="c.atualiza || c.fonte" class="chips">
+                <span v-if="c.atualiza" class="chip atualiza">Atualiza o que já existe</span>
+                <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : 'Texto no Acervo') }}</a>
               </div>
-              <div class="imagem">
-                <img v-if="c.imagem_url" :src="c.imagem_url" alt="" loading="lazy" />
-                <div class="linha-acoes">
-                  <button type="button" class="botao" @click="buscandoEm = buscandoEm === i ? -1 : i">
-                    {{ c.imagem_url ? 'Trocar imagem' : 'Buscar imagem' }}
-                  </button>
-                  <button v-if="c.imagem_url" type="button" class="botao" @click="c.imagem_url = ''">Sem imagem</button>
+
+              <template v-if="editandoCartao !== i">
+                <div class="previa" :class="{ leitura: g.tipo === 'leitura' }">
+                  <img v-if="c.imagem_frente_url" class="img-frente" :src="c.imagem_frente_url" alt="" loading="lazy" />
+                  <div class="textos">
+                    <p class="p-frente">{{ c.frente }}</p>
+                    <p class="p-verso">{{ c.verso }}</p>
+                    <audio v-if="c.audio_url" class="audio-previa" controls preload="none" :src="c.audio_url" :aria-label="`Áudio do cartão ${i + 1}`" />
+                  </div>
+                  <img v-if="c.imagem_url" class="img-verso" :src="c.imagem_url" alt="" loading="lazy" />
                 </div>
-              </div>
-              <BuscaDeImagem v-if="buscandoEm === i" :termo="c.imagem || termoDaBusca(c.frente)" :contexto="contextoDoCartao(c)" @escolher="trocarImagem(i, $event)" @fechar="buscandoEm = -1" />
+                <button type="button" class="botao-link editar-cartao" @click="editandoCartao = i">Editar</button>
+              </template>
+
+              <template v-else>
+                <span class="rotulo-campo">Frente</span>
+                <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
+                <span class="rotulo-campo">Verso</span>
+                <textarea v-model="c.verso" class="campo texto-cartao" :rows="g.tipo === 'leitura' ? 10 : 2" :aria-label="`Verso do cartão ${i + 1}`" />
+                <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />
+                <div v-if="c.audio_url" class="audio">
+                  <audio controls preload="none" :src="c.audio_url" :aria-label="`Áudio do cartão ${i + 1}`" />
+                  <button type="button" class="botao" @click="c.audio_url = ''">Sem áudio</button>
+                </div>
+                <div v-for="lado in ['frente', 'verso']" :key="lado" class="imagem">
+                  <img v-if="c[lado === 'frente' ? 'imagem_frente_url' : 'imagem_url']" :src="c[lado === 'frente' ? 'imagem_frente_url' : 'imagem_url']" alt="" loading="lazy" />
+                  <span class="rotulo-campo lado">Imagem {{ lado === 'frente' ? 'da frente' : 'do verso' }}</span>
+                  <div class="linha-acoes">
+                    <button type="button" class="botao" @click="abrirBusca(i, lado)">
+                      {{ c[lado === 'frente' ? 'imagem_frente_url' : 'imagem_url'] ? 'Trocar' : 'Buscar' }}
+                    </button>
+                    <button v-if="c[lado === 'frente' ? 'imagem_frente_url' : 'imagem_url']" type="button" class="botao" @click="c[lado === 'frente' ? 'imagem_frente_url' : 'imagem_url'] = ''">
+                      Tirar
+                    </button>
+                  </div>
+                </div>
+                <BuscaDeImagem
+                  v-if="buscandoEm?.i === i"
+                  :termo="(buscandoEm.lado === 'frente' ? c.imagem_frente : c.imagem) || termoDaBusca(c.verso || c.frente)"
+                  :contexto="contextoDoCartao(c)"
+                  @escolher="trocarImagem"
+                  @fechar="buscandoEm = null"
+                />
+                <button type="button" class="botao-link editar-cartao" @click="(editandoCartao = -1), (buscandoEm = null)">Pronto</button>
+              </template>
             </div>
           </li>
         </ul>
@@ -350,7 +413,141 @@ onBeforeUnmount(() => clearTimeout(relogio))
 .quantos {
   display: grid;
   gap: 6px;
-  max-width: 260px;
+  max-width: 200px;
+}
+
+.caixa {
+  position: relative;
+}
+
+.caixa textarea {
+  display: block;
+  width: 100%;
+  padding-bottom: 52px;
+}
+
+.falar {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+
+.entendimento {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--marca);
+  border-radius: var(--raio-p);
+  background: var(--superficie);
+  font-family: var(--leitura);
+  line-height: 1.5;
+}
+
+.entendimento .rotulo-campo {
+  font-family: var(--interface);
+}
+
+.botao-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--marca);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.botao-link:hover {
+  text-decoration: underline;
+}
+
+.contagem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A prévia: como o cartão aparece no estudo, compacto. */
+.previa {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.textos {
+  flex: 1;
+  min-width: 0;
+}
+
+.textos p {
+  margin: 0;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.p-frente {
+  font-family: var(--leitura);
+  font-size: 1.02rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.p-verso {
+  margin-top: 4px !important;
+  color: var(--texto-suave);
+  font-family: var(--leitura);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.previa.leitura .p-verso {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.img-frente,
+.img-verso {
+  flex-shrink: 0;
+  border-radius: var(--raio-p);
+  background: var(--superficie);
+  object-fit: contain;
+}
+
+.img-frente {
+  width: 96px;
+  height: 64px;
+  box-shadow: 0 0 0 1px var(--linha);
+}
+
+.img-verso {
+  width: 64px;
+  height: 64px;
+}
+
+.audio-previa {
+  height: 34px;
+  max-width: 100%;
+  margin-top: 8px;
+}
+
+.editar-cartao {
+  justify-self: start;
+}
+
+.lado {
+  min-width: 110px;
 }
 
 .dica {
@@ -413,7 +610,7 @@ select.campo {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 12px;
-  padding: 16px 0;
+  padding: 14px 0;
 }
 
 .marcar {
@@ -467,16 +664,16 @@ select.campo {
 
 .imagem {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
 }
 
 .imagem img {
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--raio-p);
   background: var(--superficie);
-  object-fit: cover;
+  object-fit: contain;
 }
 
 /* A barra de aprovar fica à mão no fim da tela, mesmo numa proposta longa. */

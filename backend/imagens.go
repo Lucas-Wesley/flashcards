@@ -234,17 +234,17 @@ func (a *app) limparMidiaSempre(ctx context.Context) {
 // que uma nota guarda e o que uma proposta em revisão aponta (o cartão que ela vai atualizar).
 func (a *app) limparMidia(ctx context.Context, antesDe time.Time) (int, error) {
 	usados := map[string]bool{}
-	rows, err := a.db.QueryContext(ctx, `SELECT imagem, audio FROM notas WHERE imagem != '' OR audio != ''`)
+	rows, err := a.db.QueryContext(ctx, `SELECT imagem, imagem_frente, audio FROM notas WHERE imagem != '' OR imagem_frente != '' OR audio != ''`)
 	if err != nil {
 		return 0, err
 	}
 	for rows.Next() {
-		var imagem, audio string
-		if err := rows.Scan(&imagem, &audio); err != nil {
+		var imagem, imagemFrente, audio string
+		if err := rows.Scan(&imagem, &imagemFrente, &audio); err != nil {
 			rows.Close()
 			return 0, err
 		}
-		usados[imagem], usados[audio] = true, true
+		usados[imagem], usados[imagemFrente], usados[audio] = true, true, true
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -262,6 +262,7 @@ func (a *app) limparMidia(ctx context.Context, antesDe time.Time) (int, error) {
 		}
 		for _, c := range g.Proposta.cartoesOuNada() {
 			usados[strings.TrimPrefix(c.ImagemURL, "/api/imagens/")] = true
+			usados[strings.TrimPrefix(c.ImagemFrenteURL, "/api/imagens/")] = true
 			usados[strings.TrimPrefix(c.AudioURL, "/api/audios/")] = true
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -38,7 +39,43 @@ type imagemAchada struct {
 type fonteDeImagem func(ctx context.Context, termo string) ([]imagemAchada, error)
 
 // buscarImagens junta as fontes, ordena pelo termo e pelo contexto e devolve até limite imagens.
+// Um termo "Arquivo:Nome.svg" (F39) é um arquivo exato do Commons: ele vem primeiro, e a busca pelo
+// nome completa a lista (ou a faz sozinha, se o arquivo não existir).
 func (a *app) buscarImagens(ctx context.Context, termo, contexto string, limite int, comOpenverse bool) ([]imagemAchada, error) {
+	var exato []imagemAchada
+	if nome, ok := arquivoPedido(termo); ok {
+		if im, err := a.arquivoDoCommons(ctx, nome); err == nil && im != nil {
+			if limite == 1 {
+				return []imagemAchada{*im}, nil
+			}
+			exato = append(exato, *im)
+		}
+		termo = strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(nome, filepath.Ext(nome)), "_"))
+	}
+	achadas, err := a.buscarNasFontes(ctx, termo, contexto, limite, comOpenverse)
+	if len(exato) == 0 {
+		return achadas, err
+	}
+	for _, im := range achadas {
+		if im.URL != exato[0].URL && len(exato) < limite {
+			exato = append(exato, im)
+		}
+	}
+	return exato, nil
+}
+
+// arquivoPedido: "Arquivo:Flag of Portugal.svg" (ou File:, Ficheiro:) → "Flag of Portugal.svg".
+func arquivoPedido(termo string) (string, bool) {
+	antes, depois, ok := strings.Cut(strings.TrimSpace(termo), ":")
+	switch strings.ToLower(strings.TrimSpace(antes)) {
+	case "arquivo", "file", "ficheiro", "imagem", "image":
+		depois = strings.TrimSpace(depois)
+		return depois, ok && depois != ""
+	}
+	return "", false
+}
+
+func (a *app) buscarNasFontes(ctx context.Context, termo, contexto string, limite int, comOpenverse bool) ([]imagemAchada, error) {
 	palavrasDoTermo, palavrasDoContexto := palavras(termo), palavras(contexto)
 	fontes := []fonteDeImagem{a.buscarNaWikipedia, a.buscarNoCommons}
 	// O termo costuma ser o assunto ("Bandeira do Brasil"); o ano que o cartão cita leva à época certa.
@@ -286,6 +323,48 @@ func (a *app) buscarNoCommons(ctx context.Context, termo string) ([]imagemAchada
 			Licenca: ii.ExtMetadata["LicenseShortName"].Value, Autor: cortar(autor, 80)})
 	}
 	return achadas, nil
+}
+
+// arquivoDoCommons traz um arquivo pelo nome exato; nil quando ele não existe.
+func (a *app) arquivoDoCommons(ctx context.Context, nome string) (*imagemAchada, error) {
+	if a.cfg.commons == "" {
+		return nil, nil
+	}
+	q := url.Values{
+		"action": {"query"}, "format": {"json"}, "formatversion": {"2"}, "redirects": {"1"},
+		"titles": {"File:" + nome}, "prop": {"imageinfo"}, "iiprop": {"url|mime|extmetadata"}, "iiurlwidth": {"800"},
+		"iiextmetadatafilter": {"LicenseShortName|Artist"},
+	}
+	var corpo struct {
+		Query struct {
+			Pages []struct {
+				Title     string `json:"title"`
+				Missing   bool   `json:"missing"`
+				ImageInfo []struct {
+					ThumbURL    string `json:"thumburl"`
+					Mime        string `json:"mime"`
+					ExtMetadata map[string]struct {
+						Value string `json:"value"`
+					} `json:"extmetadata"`
+				} `json:"imageinfo"`
+			} `json:"pages"`
+		} `json:"query"`
+	}
+	if err := a.consultar(ctx, a.cfg.commons+"?"+q.Encode(), "o Wikimedia Commons", &corpo); err != nil {
+		return nil, err
+	}
+	for _, p := range corpo.Query.Pages {
+		if p.Missing || len(p.ImageInfo) == 0 || p.ImageInfo[0].ThumbURL == "" || !strings.HasPrefix(p.ImageInfo[0].Mime, "image/") {
+			continue
+		}
+		ii := p.ImageInfo[0]
+		titulo := strings.TrimPrefix(p.Title, "File:")
+		titulo = strings.TrimSuffix(titulo, filepath.Ext(titulo))
+		autor := strings.TrimSpace(etiquetas.ReplaceAllString(ii.ExtMetadata["Artist"].Value, ""))
+		return &imagemAchada{Titulo: titulo, URL: ii.ThumbURL, Fonte: "Wikimedia Commons",
+			Licenca: ii.ExtMetadata["LicenseShortName"].Value, Autor: cortar(autor, 80)}, nil
+	}
+	return nil, nil
 }
 
 func (a *app) buscarNoOpenverse(ctx context.Context, termo string) ([]imagemAchada, error) {

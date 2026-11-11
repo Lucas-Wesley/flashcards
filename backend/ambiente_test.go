@@ -76,8 +76,23 @@ func novoAmbiente(t *testing.T) *ambiente {
 			w.Write(append([]byte("ID3\x04\x00\x00\x00\x00\x00\x00"), r.URL.Path...))
 			return
 		}
+		// Bandeiras e mapas (F39): PNGs diferentes, para a frente e o verso não virarem o mesmo arquivo.
+		if strings.HasPrefix(r.URL.Path, "/flag-") || strings.HasPrefix(r.URL.Path, "/mapa-") || r.URL.Path == "/artigo.png" {
+			w.Write(append(append([]byte{}, pngDeTeste...), r.URL.Path...))
+			return
+		}
 		// Commons falso: a bandeira atual e a do Império; com o ano, só a do Império.
 		if r.URL.Path == "/commons/api.php" {
+			// Um arquivo pelo nome exato (F39): só a bandeira e o mapa do Japão existem.
+			if titulo := r.URL.Query().Get("titles"); titulo != "" {
+				arquivos := map[string]string{"File:Flag of Japan.svg": "/flag-japan.png", "File:Japan (orthographic projection).svg": "/mapa-japan.png"}
+				if caminho, ok := arquivos[titulo]; ok {
+					fmt.Fprintf(w, `{"query":{"pages":[{"title":%q,"imageinfo":[{"thumburl":"%s%s","mime":"image/svg+xml","extmetadata":{}}]}]}}`, titulo, e.wiki.URL, caminho)
+				} else {
+					fmt.Fprintf(w, `{"query":{"pages":[{"title":%q,"missing":true}]}}`, titulo)
+				}
+				return
+			}
 			busca := r.URL.Query().Get("gsrsearch")
 			switch {
 			case strings.Contains(busca, "Bandeira do Brasil 1822"):

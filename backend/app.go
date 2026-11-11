@@ -28,21 +28,26 @@ type config struct {
 	link string
 	// Estudar na TV (F37): o endereço da página da TV, que o celular mostra.
 	enderecoDaTV string
+	// Falar o pedido (F39): o Whisper do Mac mini e, com o Mac fora, o do servidor (os do Acervo).
+	whisper        string
+	whisperReserva string
 }
 
 func configDoAmbiente(dados string) config {
 	return config{
-		dados:         absoluto(dados),
-		regras:        absoluto(env("REGRAS_DIR", "../regras")),
-		claude:        env("CLAUDE_BIN", "claude"),
-		modelo:        os.Getenv("CLAUDE_MODEL"),
-		wiki:          env("WIKI_API", "https://%s.wikipedia.org/w/api.php"),
-		commons:       env("COMMONS_API", "https://commons.wikimedia.org/w/api.php"),
-		openverse:     env("OPENVERSE_API", "https://api.openverse.org/v1/images/"),
-		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
-		ntfy:          os.Getenv("NTFY_URL"),
-		link:          strings.TrimSuffix(env("FLASHCARDS_LINK", "https://flashcards.internal"), "/"),
-		enderecoDaTV:  env("URL_DA_TV", "http://localhost:8081"),
+		dados:          absoluto(dados),
+		regras:         absoluto(env("REGRAS_DIR", "../regras")),
+		claude:         env("CLAUDE_BIN", "claude"),
+		modelo:         os.Getenv("CLAUDE_MODEL"),
+		wiki:           env("WIKI_API", "https://%s.wikipedia.org/w/api.php"),
+		commons:        env("COMMONS_API", "https://commons.wikimedia.org/w/api.php"),
+		openverse:      env("OPENVERSE_API", "https://api.openverse.org/v1/images/"),
+		hostsDeImagem:  strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
+		ntfy:           os.Getenv("NTFY_URL"),
+		link:           strings.TrimSuffix(env("FLASHCARDS_LINK", "https://flashcards.internal"), "/"),
+		enderecoDaTV:   env("URL_DA_TV", "http://localhost:8081"),
+		whisper:        strings.TrimSuffix(os.Getenv("WHISPER_URL"), "/"),
+		whisperReserva: strings.TrimSuffix(os.Getenv("WHISPER_RESERVA_URL"), "/"),
 	}
 }
 

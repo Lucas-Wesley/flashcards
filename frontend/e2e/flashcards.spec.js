@@ -92,7 +92,8 @@ test('monta cartões a partir de um link compartilhado', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Cartões do link' })).toBeVisible()
   await expect(page.getByText('3 frases de exemplo de “Run Into”, 2 com áudio.')).toBeVisible()
-  await expect(page.getByLabel('Frente do cartão 1')).toHaveValue('I ran into an old friend yesterday.')
+  // Na revisão, cada cartão aparece como no estudo; os campos só abrem em "Editar".
+  await expect(page.locator('.p-frente').first()).toHaveText('I ran into an old friend yesterday.')
   await expect(page.getByLabel('Áudio do cartão 1')).toBeAttached()
   // O baralho pode ser trocado na revisão; fica o escolhido no pedido.
   await expect(page.getByLabel('Baralho', { exact: true }).locator('option:checked')).toHaveText('Inglês')
@@ -117,7 +118,10 @@ test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await page.getByRole('button', { name: 'Adicionar' }).click()
   await page.getByRole('link', { name: 'Com IA' }).click()
   await page.getByLabel('Pedido').fill('presidentes do Brasil no século 21')
-  await page.getByLabel('Quantidade').fill('10')
+  // A quantidade é opcional e fica recolhida em Opções: em branco, a IA decide.
+  await expect(page.getByLabel('Quantidade')).toBeHidden()
+  await expect(page.getByText('a IA decide quantos')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Falar em vez de escrever' })).toBeVisible()
   await page.getByRole('button', { name: 'Pedir à IA' }).click()
 
   await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
@@ -125,9 +129,11 @@ test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await page.getByRole('link', { name: 'Pedidos' }).click()
   await expect(page.getByRole('heading', { name: 'Pedidos' })).toBeVisible()
   await page.getByRole('link', { name: /presidentes do Brasil no século 21.*Para revisar/ }).click()
-  await expect(page.getByText('2 cartões propostos · 2 marcados')).toBeVisible()
+  await expect(page.getByText('2 de 2 cartões marcados')).toBeVisible()
+  await expect(page.getByText(/cerca de/)).toHaveCount(0)
   await expect(page.getByLabel('Nome do baralho novo')).toHaveValue('Presidentes do Brasil no século 21')
   await page.getByLabel('Incluir o cartão 2').uncheck()
+  await page.getByRole('button', { name: 'Editar', exact: true }).first().click()
   await page.getByLabel('Verso do cartão 1').fill('Lula (2003–2010)')
   await page.getByRole('button', { name: 'Criar baralho com 1 cartão' }).click()
 
@@ -146,7 +152,7 @@ test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await page.getByRole('button', { name: 'Refazer com este pedido' }).click()
   await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
   await expect(page.locator('.pedido')).toContainText('com o partido de cada um')
-  await expect(page.getByText('Atualiza o cartão que já existe')).toHaveCount(1)
+  await expect(page.getByText('Atualiza o que já existe')).toHaveCount(1)
   await page.getByRole('button', { name: 'Adicionar 2 ao baralho' }).click()
   await expect(page.getByText('1 nota criada, 1 atualizada.')).toBeVisible()
 })
@@ -269,4 +275,25 @@ test('um cartão de leitura mostra o verso como texto para ler', async ({ page }
   await page.keyboard.press('Space')
   await expect(page.locator('.face.leitura .verso')).toContainText('banir (ban)')
   await expect(page.locator('.face.leitura .verso')).toHaveCSS('text-align', 'left')
+})
+
+test('um baralho de reconhecer: a bandeira na frente, o nome no verso', async ({ page }) => {
+  await page.goto('/#/gerar')
+  await page.getByLabel('Pedido').fill('BANDEIRAS DO MUNDO: na frente a bandeira, no verso o nome do país e um mapa')
+  await page.getByRole('button', { name: 'Pedir à IA' }).click()
+
+  await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
+  // A IA diz como entendeu o pedido; a frente se repete, e a bandeira é o que diferencia.
+  await expect(page.locator('.entendimento')).toContainText('a bandeira na frente')
+  await expect(page.locator('.p-frente')).toHaveText(['De que país é esta bandeira?', 'De que país é esta bandeira?'])
+  await expect(page.locator('.img-frente')).toHaveCount(2)
+  await page.getByLabel('Nome do baralho novo').fill('Bandeiras do mundo')
+  await page.getByRole('button', { name: 'Criar baralho com 2 cartões' }).click()
+  await expect(page.getByText('2 notas criadas.')).toBeVisible()
+
+  await page.getByRole('link', { name: 'Estudar', exact: true }).click()
+  await expect(page.locator('img.da-frente')).toHaveAttribute('src', /\/api\/imagens\/[0-9a-f]{32}\.png$/)
+  await expect(page.locator('.frente')).toHaveText('De que país é esta bandeira?')
+  await page.keyboard.press('Space')
+  await expect(page.locator('.verso')).toHaveText(/Japão|Brasil/)
 })

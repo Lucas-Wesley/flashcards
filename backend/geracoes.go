@@ -31,8 +31,13 @@ const (
 	rejeitada = "rejeitada"
 )
 
-// A IA pesquisa para conferir os fatos, então uma geração pode levar alguns minutos.
-const tempoMaximoDaGeracao = 15 * time.Minute
+// A IA pesquisa para conferir os fatos, então uma geração pode levar alguns minutos; um conjunto
+// grande (os países do mundo, com duas imagens cada) leva mais.
+const tempoMaximoDaGeracao = 30 * time.Minute
+
+// Quantidade: opcional no pedido à IA (0 = ela decide pelo pedido, F39); o teto é o de um conjunto
+// grande, como os países do mundo.
+const maximoDeCartoes = 300
 
 type geracao struct {
 	ID     int64  `json:"id"`
@@ -69,9 +74,12 @@ func (g *geracao) podeRefazer() bool {
 }
 
 type proposta struct {
-	NomeBaralho string           `json:"nome_baralho"`
-	Observacoes string           `json:"observacoes"`
-	Cartoes     []cartaoProposto `json:"cartoes"`
+	NomeBaralho string `json:"nome_baralho"`
+	// Entendimento (F39): como a IA entendeu o pedido (o formato do cartão e o que ele cobre), para o
+	// Lucas ver logo se ela captou a ideia.
+	Entendimento string           `json:"entendimento,omitempty"`
+	Observacoes  string           `json:"observacoes"`
+	Cartoes      []cartaoProposto `json:"cartoes"`
 }
 
 type cartaoProposto struct {
@@ -82,6 +90,9 @@ type cartaoProposto struct {
 	// ImagemURL: a foto encontrada; só é baixada para o servidor quando o Lucas aprova.
 	Imagem    string `json:"imagem"`
 	ImagemURL string `json:"imagem_url"`
+	// ImagemFrente (F39): a imagem que aparece com a pergunta (a bandeira a reconhecer), do mesmo jeito.
+	ImagemFrente    string `json:"imagem_frente,omitempty"`
+	ImagemFrenteURL string `json:"imagem_frente_url,omitempty"`
 	// AudioURL: a pronúncia da frente, quando a página de um link traz (baixada ao aprovar).
 	// As duas também podem apontar para um arquivo que o app já tem (/api/imagens/…, /api/audios/…):
 	// é o caso de um cartão que já existe e vai ser atualizado.
@@ -99,6 +110,7 @@ const esquemaProposta = `{
   "type": "object",
   "properties": {
     "nome_baralho": {"type": "string"},
+    "entendimento": {"type": "string"},
     "observacoes": {"type": "string"},
     "cartoes": {
       "type": "array",
@@ -109,6 +121,7 @@ const esquemaProposta = `{
           "verso": {"type": "string"},
           "tags": {"type": "string"},
           "imagem": {"type": "string"},
+          "imagem_frente": {"type": "string"},
           "secao": {"type": "string"}
         },
         "required": ["frente", "verso"]
@@ -252,6 +265,16 @@ var nomesDosTipos = map[string]string{
 	"leitura":   "de leitura (a frente é uma pergunta aberta; o verso, um texto curto para ler)",
 }
 
+// textoDaQuantidade: sem número, a IA decide pelo pedido; com número, ele é uma referência, e um
+// conjunto completo pedido com todas as letras ("todos os estados") vale mais que ele (F39).
+func textoDaQuantidade(n int) string {
+	if n <= 0 {
+		return "Quantidade: o Lucas não disse; decida pelo pedido (ver \"Quantos cartões\" nas instruções)."
+	}
+	return fmt.Sprintf("Quantidade: o Lucas sugeriu cerca de %d notas. É uma referência, não um teto: se o pedido nomeia um "+
+		"conjunto completo (todos os estados, todos os países), cubra o conjunto inteiro e diga em observacoes que passou do número.", n)
+}
+
 func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	pasta := filepath.Join(a.cfg.dados, "geracoes", strconv.FormatInt(g.ID, 10))
 	if err := os.MkdirAll(pasta, 0o755); err != nil {
@@ -269,20 +292,25 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		if existentes := a.notasDoBaralho(ctx, b.ID); len(existentes) > 0 {
 			var lista []string
 			for _, n := range existentes {
-				lista = append(lista, fmt.Sprintf("%s → %s", linhaUnica(n.Frente), cortar(linhaUnica(n.Verso), 300)))
+				com := ""
+				if n.ImagemFrente != "" {
+					com = " [com imagem na frente]"
+				}
+				lista = append(lista, fmt.Sprintf("%s → %s%s", linhaUnica(n.Frente), cortar(linhaUnica(n.Verso), 300), com))
 			}
 			destino += " Ele já tem estes cartões (frente → verso). Não crie cartões repetidos. Se o pedido for para mudar ou " +
-				"completar cartões que já existem, devolva-os com a frente exatamente igual à de lá: o cartão é atualizado, " +
-				"sem perder o histórico de estudo.\n- " + strings.Join(lista, "\n- ")
+				"completar cartões que já existem, devolva-os com a frente exatamente igual à de lá (e, num cartão com imagem " +
+				"na frente, também o verso igual): o cartão é atualizado, sem perder o histórico de estudo. Um pedido de um " +
+				"assunto novo no mesmo baralho não muda os cartões que já existem.\n- " + strings.Join(lista, "\n- ")
 		}
 	}
 
 	pedido := pedidoClaude{
 		pasta: pasta,
 		regra: "gerar-baralho.md",
-		instrucao: fmt.Sprintf("O Lucas pediu um baralho de flashcards.\n\nPedido: %q\n\nQuantidade: cerca de %d notas.\n"+
+		instrucao: fmt.Sprintf("O Lucas pediu um baralho de flashcards.\n\nPedido: %q\n\n%s\n"+
 			"Tipo das notas: %s.\n%s\n\nDevolva os dados no formato pedido.",
-			g.Pedido, g.Quantidade, nomesDosTipos[g.Tipo], destino),
+			g.Pedido, textoDaQuantidade(g.Quantidade), nomesDosTipos[g.Tipo], destino),
 		esquema: esquemaProposta,
 	}
 	if g.doTexto() {
@@ -299,13 +327,14 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	if err := dadosDaResposta(r, &p); err != nil {
 		return nil, err
 	}
-	p.NomeBaralho = strings.TrimSpace(p.NomeBaralho)
+	p.NomeBaralho, p.Entendimento = strings.TrimSpace(p.NomeBaralho), strings.TrimSpace(p.Entendimento)
 	if g.BaralhoID == "" && g.NomeSugerido != "" {
 		p.NomeBaralho = g.NomeSugerido
 	}
 	cartoes := p.Cartoes[:0]
 	for _, c := range p.Cartoes {
 		c.Frente, c.Verso, c.Tags, c.Imagem = strings.TrimSpace(c.Frente), strings.TrimSpace(c.Verso), limparTags(c.Tags), strings.TrimSpace(c.Imagem)
+		c.ImagemFrente = strings.TrimSpace(c.ImagemFrente)
 		if g.doTexto() {
 			c.Secao, c.Fonte = g.fonteDoCartao(c.Secao)
 		} else {
@@ -320,17 +349,20 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		return nil, errors.New("a IA não devolveu nenhum cartão")
 	}
 
-	// Cartão que já existe no baralho: é uma atualização, e a foto e o áudio que ele tem ficam.
+	// Cartão que já existe no baralho: é uma atualização, e as fotos e o áudio que ele tem ficam.
 	if g.BaralhoID != "" {
 		existentes := map[string]nota{}
 		for _, n := range a.notasDoBaralho(ctx, g.BaralhoID) {
-			existentes[n.Frente] = n
+			existentes[chaveDaNota(n.Frente, n.Verso, n.ImagemFrente != "")] = n
 		}
 		for i, c := range p.Cartoes {
-			if n, ok := existentes[c.Frente]; ok {
+			if n, ok := existentes[chaveDaNota(c.Frente, c.Verso, c.ImagemFrente != "")]; ok {
 				p.Cartoes[i].Atualiza = true
 				if n.Imagem != "" {
 					p.Cartoes[i].ImagemURL = "/api/imagens/" + n.Imagem
+				}
+				if n.ImagemFrente != "" {
+					p.Cartoes[i].ImagemFrenteURL = "/api/imagens/" + n.ImagemFrente
 				}
 				if n.Audio != "" {
 					p.Cartoes[i].AudioURL = "/api/audios/" + n.Audio
@@ -339,17 +371,52 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 		}
 	}
 
-	// As fotos vêm da busca pelo que a IA indicou, ordenada pelo cartão inteiro (frente, verso e tags);
-	// sem foto, o cartão segue sem imagem.
-	for i, c := range p.Cartoes {
-		if c.Imagem == "" || c.ImagemURL != "" || ctx.Err() != nil {
-			continue
-		}
-		if achadas, err := a.buscarImagens(ctx, c.Imagem, c.Frente+"\n"+c.Verso+"\n"+c.Tags, 1, false); err == nil && len(achadas) > 0 {
-			p.Cartoes[i].ImagemURL = achadas[0].URL
-		}
-	}
+	a.buscarFotosDaProposta(ctx, p.Cartoes)
 	return &p, nil
+}
+
+// buscasAoMesmoTempo: um baralho de 200 cartões com duas fotos cada, uma por vez, levaria uns 10
+// minutos; poucas ao mesmo tempo não abusam da Wikipédia.
+const buscasAoMesmoTempo = 6
+
+// buscarFotosDaProposta: as fotos vêm da busca pelo que a IA indicou, ordenada pelo cartão inteiro
+// (frente, verso e tags); sem foto, o cartão segue sem imagem.
+func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoProposto) {
+	vagas := make(chan struct{}, buscasAoMesmoTempo)
+	var wg sync.WaitGroup
+	buscar := func(termo, contexto string, destino *string) {
+		if termo == "" || *destino != "" {
+			return
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vagas <- struct{}{}
+			defer func() { <-vagas }()
+			if ctx.Err() != nil {
+				return
+			}
+			if achadas, err := a.buscarImagens(ctx, termo, contexto, 1, false); err == nil && len(achadas) > 0 {
+				*destino = achadas[0].URL
+			}
+		}()
+	}
+	for i := range cartoes {
+		c := &cartoes[i]
+		contexto := c.Frente + "\n" + c.Verso + "\n" + c.Tags
+		buscar(c.Imagem, contexto, &c.ImagemURL)
+		buscar(c.ImagemFrente, contexto, &c.ImagemFrenteURL)
+	}
+	wg.Wait()
+}
+
+// chaveDaNota: a frente identifica a nota no baralho; com imagem na frente, a frente pode ser a
+// mesma em todas ("De que país é esta bandeira?"), e o verso entra junto (F39).
+func chaveDaNota(frente, verso string, imagemNaFrente bool) string {
+	if imagemNaFrente {
+		return frente + "\x00" + verso
+	}
+	return frente
 }
 
 func (a *app) notasDoBaralho(ctx context.Context, baralhoID string) []nota {
@@ -399,8 +466,8 @@ func (a *app) handlePedirGeracao(w http.ResponseWriter, r *http.Request) {
 	case corpo.Pedido == "":
 		erroJSON(w, http.StatusBadRequest, "Diga o que você quer estudar.")
 		return
-	case corpo.Quantidade < 1 || corpo.Quantidade > 100:
-		erroJSON(w, http.StatusBadRequest, "Peça de 1 a 100 cartões.")
+	case corpo.Quantidade < 0 || corpo.Quantidade > maximoDeCartoes:
+		erroJSON(w, http.StatusBadRequest, fmt.Sprintf("A quantidade vai de 1 a %d (ou fica em branco, e a IA decide).", maximoDeCartoes))
 		return
 	case !tipoDePergunta(corpo.Tipo):
 		erroJSON(w, http.StatusBadRequest, "Tipo de nota inválido.")
@@ -531,17 +598,22 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 		a.fila.mu.Unlock()
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, terminado_em = ? WHERE id = ? AND estado = ?`, cancelada, a.agora(), id, naFila)
 	case "refazer":
+		// Quantidade: ausente, fica a do pedido; 0, a IA decide (F39).
 		var corpo struct {
 			Pedido     string `json:"pedido"`
-			Quantidade int    `json:"quantidade"`
+			Quantidade *int   `json:"quantidade"`
 		}
 		if r.ContentLength != 0 && !lerCorpo(w, r, &corpo) {
 			return
 		}
 		corpo.Pedido = strings.TrimSpace(corpo.Pedido)
-		if corpo.Quantidade != 0 && (corpo.Quantidade < 1 || corpo.Quantidade > 100) {
-			erroJSON(w, http.StatusBadRequest, "Peça de 1 a 100 cartões.")
-			return
+		quantidade := -1
+		if corpo.Quantidade != nil {
+			quantidade = *corpo.Quantidade
+			if quantidade < 0 || quantidade > maximoDeCartoes {
+				erroJSON(w, http.StatusBadRequest, fmt.Sprintf("A quantidade vai de 1 a %d (ou fica em branco, e a IA decide).", maximoDeCartoes))
+				return
+			}
 		}
 		// Um link só é refeito quando passou pela IA (a página tinha mais de 3 frases, ou não as mostrava prontas).
 		if g, err := a.geracao(ctx, id); err == nil && !g.podeRefazer() {
@@ -551,11 +623,11 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 		// Um pedido aprovado num baralho novo passa a mirar esse baralho (se ele ainda existir).
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '',
 				pedido = CASE WHEN ? = '' THEN pedido ELSE ? END,
-				quantidade = CASE WHEN ? = 0 THEN quantidade ELSE ? END,
+				quantidade = CASE WHEN ? < 0 THEN quantidade ELSE ? END,
 				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
 				resultado = ''
 			WHERE id = ? AND origem IN ('ia', 'acervo', 'link') AND estado IN (?, ?, ?, ?, ?)`,
-			naFila, corpo.Pedido, corpo.Pedido, corpo.Quantidade, corpo.Quantidade, concluida,
+			naFila, corpo.Pedido, corpo.Pedido, quantidade, quantidade, concluida,
 			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()
 	case "descartar":
@@ -636,15 +708,23 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	semImagem, semAudio := 0, 0
-	for i, c := range corpo.Cartoes {
-		if nome, ok := strings.CutPrefix(c.ImagemURL, "/api/imagens/"); ok && nomeDeImagem.MatchString(nome) {
-			notas[i].Imagem = nome
-		} else if c.ImagemURL != "" {
-			if notas[i].Imagem, err = a.baixarImagem(ctx, c.ImagemURL); err != nil {
-				log.Printf("geração %d: imagem %s: %v", id, c.ImagemURL, err)
-				semImagem++
-			}
+	trazerImagem := func(endereco string) string {
+		if nome, ok := strings.CutPrefix(endereco, "/api/imagens/"); ok && nomeDeImagem.MatchString(nome) {
+			return nome
 		}
+		if endereco == "" {
+			return ""
+		}
+		nome, err := a.baixarImagem(ctx, endereco)
+		if err != nil {
+			log.Printf("geração %d: imagem %s: %v", id, endereco, err)
+			semImagem++
+		}
+		return nome
+	}
+	for i, c := range corpo.Cartoes {
+		notas[i].Imagem = trazerImagem(c.ImagemURL)
+		notas[i].ImagemFrente = trazerImagem(c.ImagemFrenteURL)
 		if nome, ok := strings.CutPrefix(c.AudioURL, "/api/audios/"); ok && nomeDeAudio.MatchString(nome) {
 			notas[i].Audio = nome
 		} else if c.AudioURL != "" {
@@ -674,19 +754,22 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	criadas, atualizadas := 0, 0
-	for _, d := range notas {
+	for i, d := range notas {
 		d.BaralhoID = baralhoID
-		// A mesma frente no baralho: atualiza a nota, e os cartões dela seguem com o histórico.
+		// A mesma frente no baralho: atualiza a nota, e os cartões dela seguem com o histórico. Com
+		// imagem na frente, o verso entra junto, mesmo que a imagem não tenha vindo agora.
 		var existente, tipo string
-		err := tx.QueryRowContext(ctx, `SELECT id, tipo FROM notas WHERE baralho_id = ? AND frente = ? LIMIT 1`, baralhoID, d.Frente).Scan(&existente, &tipo)
+		comImagem := corpo.Cartoes[i].ImagemFrenteURL != ""
+		err := tx.QueryRowContext(ctx, `SELECT id, tipo FROM notas WHERE baralho_id = ? AND frente = ? AND (? = 0 OR (verso = ? AND imagem_frente != '')) LIMIT 1`,
+			baralhoID, d.Frente, comImagem, d.Verso).Scan(&existente, &tipo)
 		switch {
 		case err == nil:
 			if tipoDePergunta(d.Tipo) && tiposDeNota[d.Tipo] < tiposDeNota[tipo] {
 				d.Tipo = tipo // atualizar não apaga o cartão do verso
 			}
-			_, err = tx.ExecContext(ctx, `UPDATE notas SET tipo = ?, verso = ?, tags = ?, imagem = ?, audio = ?,
+			_, err = tx.ExecContext(ctx, `UPDATE notas SET tipo = ?, verso = ?, tags = ?, imagem = ?, imagem_frente = ?, audio = ?,
 					fonte = CASE WHEN ? = '' THEN fonte ELSE ? END, atualizada_em = ? WHERE id = ?`,
-				d.Tipo, d.Verso, d.Tags, d.Imagem, d.Audio, d.Fonte, d.Fonte, a.agora(), existente)
+				d.Tipo, d.Verso, d.Tags, d.Imagem, d.ImagemFrente, d.Audio, d.Fonte, d.Fonte, a.agora(), existente)
 			if err == nil {
 				err = criarCartoes(ctx, tx, existente, baralhoID, d.Tipo, a.agora())
 			}

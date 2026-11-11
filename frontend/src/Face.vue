@@ -2,9 +2,10 @@
 import Icone from './Icone.vue'
 import { ondeAbre } from './fonte.js'
 
-// O cartão na tela, no estudo e no aleatório: a frente e, mostrada a resposta, o verso, a foto e o
-// link da fonte. O verso de um cartão de leitura (F38) é um texto para ler: alinhado à esquerda,
-// em letra de leitura, como nas Referências do Acervo; o de pergunta é curto e centralizado.
+// O cartão na tela, no estudo e no aleatório: a frente (com a imagem dela, F39: a bandeira a
+// reconhecer) e, mostrada a resposta, o verso, a foto e o link da fonte. O verso de um cartão de
+// leitura (F38) é um texto para ler: alinhado à esquerda, em letra de leitura, como nas Referências
+// do Acervo; o de pergunta é curto e centralizado.
 const props = defineProps({
   cartao: { type: Object, required: true },
   mostrando: { type: Boolean, default: false },
@@ -16,7 +17,8 @@ const leitura = () => props.cartao.tipo === 'leitura'
 
 <template>
   <section class="face" :class="{ leitura: leitura() }">
-    <div class="frente texto-cartao">{{ cartao.frente }}</div>
+    <img v-if="cartao.imagem_frente" class="foto da-frente" :src="`/api/imagens/${cartao.imagem_frente}`" alt="" />
+    <div class="frente texto-cartao" :class="{ legenda: cartao.imagem_frente }">{{ cartao.frente }}</div>
     <button v-if="audioNaPergunta" class="botao icone som" aria-label="Ouvir de novo" title="Ouvir de novo (R)" @click="emit('tocar')"><Icone nome="som" /></button>
     <template v-if="mostrando">
       <hr />
@@ -48,6 +50,22 @@ const leitura = () => props.cartao.tipo === 'leitura'
 .frente {
   font-size: clamp(1.5rem, 4vw, 2.1rem);
   font-weight: 500;
+}
+
+/* Com imagem na frente, ela é o que se reconhece; o texto vira uma legenda. */
+.frente.legenda {
+  margin-top: 18px;
+  color: var(--texto-suave);
+  font-size: clamp(1.05rem, 2.6vw, 1.25rem);
+}
+
+.foto.da-frente {
+  width: min(100%, 420px);
+  height: auto;
+  max-width: min(100%, 480px);
+  max-height: 42vh;
+  margin-top: 0;
+  box-shadow: 0 0 0 1px var(--linha);
 }
 
 .verso {
