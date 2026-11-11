@@ -27,6 +27,10 @@ defineProps({ nome: { type: String, required: true } })
       <circle cx="15" cy="7.5" r="2" />
       <circle cx="9" cy="16.5" r="2" />
     </template>
+    <template v-else-if="nome === 'tv'">
+      <rect x="3" y="4.5" width="18" height="12.5" rx="2" />
+      <path d="M8.5 20.5h7M12 17v3.5" />
+    </template>
     <template v-else-if="nome === 'pesquisar'">
       <circle cx="11" cy="11" r="6.5" />
       <path d="M16 16l4.5 4.5" />

@@ -26,6 +26,8 @@ type config struct {
 	// do app que a notificação abre.
 	ntfy string
 	link string
+	// Estudar na TV (F37): o endereço da página da TV, que o celular mostra.
+	enderecoDaTV string
 }
 
 func configDoAmbiente(dados string) config {
@@ -40,6 +42,7 @@ func configDoAmbiente(dados string) config {
 		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
 		ntfy:          os.Getenv("NTFY_URL"),
 		link:          strings.TrimSuffix(env("FLASHCARDS_LINK", "https://flashcards.internal"), "/"),
+		enderecoDaTV:  env("URL_DA_TV", "http://localhost:8081"),
 	}
 }
 
@@ -58,6 +61,7 @@ type app struct {
 	cfg    config
 	fila   *filaDaIA
 	avisos *avisador // nil sem NTFY_URL
+	tv     *telaTV
 }
 
 func novoApp(db *sql.DB, rel relogio, cfg config) (*app, error) {
@@ -66,7 +70,7 @@ func novoApp(db *sql.DB, rel relogio, cfg config) (*app, error) {
 			return nil, err
 		}
 	}
-	a := &app{db: db, rel: rel, cfg: cfg, avisos: novoAvisador(cfg.ntfy)}
+	a := &app{db: db, rel: rel, cfg: cfg, avisos: novoAvisador(cfg.ntfy), tv: novaTelaTV()}
 	a.fila = novaFila(a)
 	return a, nil
 }

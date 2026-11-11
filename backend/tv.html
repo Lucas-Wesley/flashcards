@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flashcards na TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400..600&display=swap" />
+<style>
+  /* Estudar na TV (F37): só mostra o que o celular manda. Tela de longe: escuro, letra grande, nada
+     para clicar. Os tokens são os do design system, no tema escuro. */
+  :root {
+    --fundo: #121418;
+    --superficie: #1c1f24;
+    --texto: #e9eaed;
+    --texto-suave: #a2a7b0;
+    --texto-fraco: #737983;
+    --linha: rgb(255 255 255 / 8%);
+    --linha-forte: rgb(255 255 255 / 15%);
+    --marca: #b19cff;
+    --marca-fundo: #2a2343;
+    --azul: #8fb0f5;
+    --vermelho: #f07a83;
+    --interface: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, Roboto, 'Segoe UI', sans-serif;
+    --leitura: 'Literata', Georgia, serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: var(--interface);
+    cursor: none;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 3vw;
+    padding: 3.2vh 4.5vw 2.4vh;
+    border-bottom: 1px solid var(--linha);
+    font-size: 2.1vw;
+  }
+  .baralho { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .baralho .modo { color: var(--texto-fraco); font-weight: 500; }
+  .contagem { display: flex; gap: 2.2vw; color: var(--texto-fraco); font-variant-numeric: tabular-nums; }
+  .contagem .novos { color: var(--azul); }
+  .contagem .revisar { color: var(--vermelho); }
+  .contagem .atual { font-weight: 700; text-decoration: underline; text-underline-offset: 0.3em; }
+  main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 4vh 8vw;
+    text-align: center;
+  }
+  .texto { max-width: 82vw; font-family: var(--leitura); line-height: 1.4; overflow-wrap: break-word; white-space: pre-wrap; }
+  .frente { font-size: 4.4vw; font-weight: 500; }
+  .verso { font-size: 3.2vw; animation: surgir 0.35s ease-out; }
+  hr { width: 22vw; margin: 5vh auto; border: 0; border-top: 2px solid var(--linha-forte); animation: surgir 0.35s ease-out; }
+  .foto { display: block; max-width: 50vw; max-height: 32vh; margin: 4vh auto 0; border-radius: 1.2vw; object-fit: contain; }
+  .espera .espera-titulo, .fim .fim-titulo { margin: 0 0 2vh; color: var(--texto); font-family: var(--leitura); font-size: 4vw; font-weight: 600; }
+  .espera p, .fim p { margin: 0 0 1.2vh; color: var(--texto-suave); font-size: 2vw; line-height: 1.5; }
+  .marca {
+    display: grid;
+    place-items: center;
+    width: 9vw;
+    height: 9vw;
+    margin: 0 auto 4vh;
+    border-radius: 2.2vw;
+    color: var(--marca);
+    background: var(--marca-fundo);
+  }
+  .marca svg { width: 5vw; height: 5vw; }
+  .conexao {
+    position: fixed;
+    right: 3vw;
+    bottom: 3vh;
+    display: none;
+    color: var(--texto-fraco);
+    font-size: 1.4vw;
+  }
+  .sem-conexao .conexao { display: block; }
+  [hidden] { display: none !important; }
+  @keyframes surgir { from { opacity: 0; transform: translateY(1.2vh); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+  <header id="barra" hidden>
+    <span class="baralho"><span class="modo" id="modo" hidden>Todos · </span><span id="baralho"></span></span>
+    <span class="contagem" aria-label="Para hoje">
+      <span class="novos" id="novos"></span>
+      <span class="aprendendo" id="aprendendo"></span>
+      <span class="revisar" id="revisar"></span>
+    </span>
+  </header>
+
+  <main>
+    <section id="espera" class="espera">
+      <div class="marca" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2zM5 12h14" />
+          <path d="M10.4 7.3a1.7 1.7 0 013.2.5c0 1-1.6 1.2-1.6 2M8.5 15.3h7M8.5 17.3h4" />
+        </svg>
+      </div>
+      <p class="espera-titulo">Flashcards na TV</p>
+      <p>No celular, abra um baralho para estudar e toque em <strong>Mostrar na TV</strong>.</p>
+      <p>Os cartões aparecem aqui; as respostas você dá pelo celular.</p>
+    </section>
+
+    <section id="cartao" hidden>
+      <div class="texto frente" id="frente"></div>
+      <div id="resposta" hidden>
+        <hr />
+        <div class="texto verso" id="verso"></div>
+        <img class="foto" id="foto" alt="" hidden />
+      </div>
+    </section>
+
+    <section id="fim" class="fim" hidden>
+      <p class="fim-titulo">Pronto por hoje.</p>
+      <p id="fim-texto"></p>
+    </section>
+  </main>
+
+  <div class="conexao">Reconectando…</div>
+
+<script>
+  var $ = function (id) { return document.getElementById(id) }
+  var ultimo = ''
+
+  function mostrar(cena) {
+    var ativo = !!cena.ativo
+    $('barra').hidden = !ativo
+    $('espera').hidden = ativo
+    $('cartao').hidden = !ativo || !cena.frente
+    $('fim').hidden = !ativo || !!cena.frente
+    if (!ativo) return
+
+    $('modo').hidden = !cena.todos
+    $('baralho').textContent = cena.baralho || ''
+    var c = cena.contagem || {}
+    ;['novos', 'aprendendo', 'revisar'].forEach(function (f) {
+      $(f).textContent = c[f] == null ? '' : c[f]
+      $(f).className = f + (cena.fila === f ? ' atual' : '')
+    })
+
+    if (!cena.frente) {
+      $('fim-texto').textContent = cena.fim || ''
+      return
+    }
+    // A resposta só anima quando aparece: o mesmo cartão de novo não pisca.
+    var chave = cena.cartao + '|' + !!cena.mostrando
+    if (chave === ultimo) return
+    ultimo = chave
+    $('frente').textContent = cena.frente
+    $('resposta').hidden = !cena.mostrando
+    if (cena.mostrando) {
+      $('verso').textContent = cena.verso || ''
+      $('foto').hidden = !cena.imagem
+      if (cena.imagem) $('foto').src = '/imagens/' + encodeURIComponent(cena.imagem)
+    }
+  }
+
+  // EventSource reconecta sozinho; ao voltar, o servidor manda a cena atual.
+  function conectar() {
+    var fonte = new EventSource('/cena')
+    fonte.onmessage = function (ev) {
+      document.body.classList.remove('sem-conexao')
+      try { mostrar(JSON.parse(ev.data)) } catch (e) {}
+    }
+    fonte.onerror = function () { document.body.classList.add('sem-conexao') }
+  }
+  conectar()
+
+  // Que a TV não apague a tela no meio do estudo, onde o navegador deixar.
+  function manterAcesa() {
+    if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {})
+  }
+  manterAcesa()
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) manterAcesa() })
+</script>
+</body>
+</html>

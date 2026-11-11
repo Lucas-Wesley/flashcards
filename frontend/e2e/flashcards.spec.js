@@ -194,3 +194,38 @@ test('Ajustes recebe sugestões de melhoria', async ({ page }) => {
   await page.getByRole('button', { name: 'Enviar sugestão' }).click()
   await expect(page.locator('.sugestao', { hasText: 'Áudio de pronúncia' })).toBeVisible()
 })
+
+test('mostra o estudo na TV, respondendo pelo celular', async ({ page, context }) => {
+  // Um baralho só para a TV, depois dos outros testes (não muda as contas deles).
+  await page.goto('/#/novo-baralho')
+  await page.getByLabel('Nome do novo baralho').fill('Capitais')
+  await page.getByRole('button', { name: 'Criar baralho' }).click()
+  await page.getByRole('link', { name: 'Adicionar cartões' }).click()
+  await page.getByLabel('Frente').fill('França')
+  await page.getByLabel('Verso').fill('Paris')
+  await page.getByRole('main').getByRole('button', { name: 'Adicionar' }).click()
+  await expect(page.getByText('Cartão adicionado.')).toBeVisible()
+
+  const tv = await context.newPage()
+  await tv.goto('http://localhost:8097/')
+  await expect(tv.getByText('Flashcards na TV')).toBeVisible()
+
+  await page.goto('/#/baralhos')
+  await page.getByRole('link', { name: /Capitais/ }).click()
+  await page.getByRole('link', { name: 'Estudar agora' }).click()
+  await expect(page.locator('.frente')).toHaveText('França')
+  await page.getByRole('button', { name: 'Mostrar na TV' }).click()
+  await expect(page.getByRole('button', { name: 'Parar de mostrar na TV' })).toHaveAttribute('aria-pressed', 'true')
+
+  await expect(tv.locator('#frente')).toHaveText('França')
+  await expect(tv.locator('#baralho')).toHaveText('Capitais')
+  await expect(tv.locator('#verso')).toBeHidden()
+  await page.getByRole('button', { name: 'Mostrar resposta' }).click()
+  await expect(tv.locator('#verso')).toHaveText('Paris')
+  await page.getByRole('button', { name: /Fácil/ }).click()
+  await expect(tv.getByText('Pronto por hoje.')).toBeVisible()
+
+  // A escolha fica guardada; ao sair do estudo, a TV volta a esperar.
+  await page.goto('/#/baralhos')
+  await expect(tv.getByText('No celular, abra um baralho')).toBeVisible()
+})

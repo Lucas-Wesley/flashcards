@@ -1,6 +1,9 @@
 services:
   flashcards:
-    ports: !reset []
+    # O app passa pelo Caddy (HTTPS, porta 8445). A página da TV (F37) fica direto no IP da VM, em HTTP:
+    # o navegador da TV não aceita o nosso certificado.
+    ports: !override
+      - "192.168.1.20:8453:8081"
     volumes:
       - /srv/data/flashcards:/data
       # A conta do Claude escolhida no Hub (H11 do Hub), lida a cada chamada; só leitura.
@@ -9,6 +12,7 @@ services:
       # Avisos no celular (F35): o ntfy do homelab (homelab/ntfy), tópico "flashcards".
       NTFY_URL: http://ntfy/flashcards
       CLAUDE_TOKEN_ARQUIVO: /claude/token
+      URL_DA_TV: http://192.168.1.20:8453
     networks:
       - proxy
 

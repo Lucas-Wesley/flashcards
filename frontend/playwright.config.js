@@ -25,6 +25,8 @@ export default defineConfig({
           env: {
             DATA_DIR: dados,
             ADDR: ':8095',
+            ADDR_TV: ':8097',
+            URL_DA_TV: 'http://localhost:8097',
             CLAUDE_BIN: path.join(testdata, 'claude-falso'),
             REGRAS_DIR: path.resolve('../regras'),
             WIKI_API: 'http://127.0.0.1:9/w/api.php',

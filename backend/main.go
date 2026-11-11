@@ -26,6 +26,7 @@ var webDist embed.FS
 func main() {
 	dataDir := env("DATA_DIR", "./data")
 	addr := env("ADDR", ":8080")
+	addrTV := env("ADDR_TV", ":8081") // a página da TV (F37), em HTTP simples
 
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		log.Fatal(err)
@@ -65,8 +66,15 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	tv := &http.Server{Addr: addrTV, Handler: servidorDaTV(a), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		log.Printf("flashcards %s em %s", version, addr)
+		if err := tv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		log.Printf("flashcards %s em %s (TV em %s)", version, addr, addrTV)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}
@@ -75,6 +83,7 @@ func main() {
 	<-ctx.Done()
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	tv.Close() // as conexões da TV ficam abertas (Server-Sent Events): o Shutdown esperaria por elas
 	if err := srv.Shutdown(shutdown); err != nil {
 		log.Print(err)
 	}

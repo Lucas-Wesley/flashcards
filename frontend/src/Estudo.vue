@@ -1,7 +1,7 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icone from './Icone.vue'
-import { APRENDENDO, NOVO, REAPRENDENDO, REVISAO, api } from './api.js'
+import { APRENDENDO, NOVO, REAPRENDENDO, REVISAO, api, lembrar } from './api.js'
 import { hora, intervalo } from './tempo.js'
 import { ondeAbre } from './fonte.js'
 
@@ -13,6 +13,8 @@ import { ondeAbre } from './fonte.js'
 // Os botões são grandes de propósito: a mesma tela serve no celular e no navegador da TV.
 // Sem id, é o "Estudar" com todos os baralhos misturados: cada cartão mostra de que baralho é, e a
 // resposta conta no baralho dele, como se tivesse sido estudado por lá.
+// "Mostrar na TV" (F37): o celular continua sendo o estudo e manda cada cena à página da TV
+// (http://192.168.1.20:8453), que só mostra. A escolha fica guardada para a próxima vez.
 const props = defineProps({ id: { type: String, default: '' } })
 const todos = computed(() => !props.id)
 const recado = inject('recado')
@@ -24,6 +26,10 @@ const enviando = ref(false)
 const botaoMostrar = ref(null)
 let mostradoEm = Date.now()
 let espera
+
+const naTV = ref(lembrar('tv') === '1')
+const tv = ref(null) // { endereco, telas }
+let procurarTV
 
 const NOTAS = [
   { valor: 1, nome: 'Errei', classe: 'errei', dica: 'Errei: rever daqui a pouco (1)' },
@@ -38,6 +44,53 @@ const player = typeof Audio === 'undefined' ? null : new Audio()
 // Onde o áudio aparece: com a pergunta (sentido normal) ou com a resposta (invertido).
 const audioNaPergunta = computed(() => !!cartao.value?.audio && cartao.value.sentido === 0)
 const audioVisivel = computed(() => !!cartao.value?.audio && (audioNaPergunta.value || mostrando.value))
+
+const textoDoFim = computed(() => {
+  const e = estudo.value
+  if (!e) return ''
+  const feitos = e.feitos_hoje
+    ? `${e.feitos_hoje} ${e.feitos_hoje === 1 ? 'revisão' : 'revisões'} ${todos.value ? 'hoje, somando os baralhos' : 'neste baralho hoje'}.`
+    : 'Nada para estudar agora.'
+  return e.espera_ate ? `${feitos} Um cartão em aprendizado volta às ${hora(e.espera_ate)}.` : feitos
+})
+
+// enviarCena: o que a TV mostra agora. Uma falha não atrapalha o estudo no celular.
+function enviarCena() {
+  if (!naTV.value || !estudo.value) return
+  const c = cartao.value
+  const cena = {
+    ativo: true,
+    todos: todos.value,
+    baralho: estudo.value.baralho?.nome || '',
+    contagem: estudo.value.contagem,
+    fila: fila.value,
+    ...(c ? { cartao: c.id, frente: c.frente, verso: c.verso, imagem: c.imagem || '', mostrando: mostrando.value } : { fim: textoDoFim.value }),
+  }
+  api('/api/tv', { metodo: 'PUT', corpo: cena }).catch(() => {})
+}
+
+async function verTV() {
+  try {
+    tv.value = await api('/api/tv')
+  } catch {
+    tv.value = null
+  }
+  clearTimeout(procurarTV)
+  // Enquanto nenhuma TV abriu a página, o aviso com o endereço fica e é conferido de novo.
+  if (naTV.value && !tv.value?.telas) procurarTV = setTimeout(verTV, 4000)
+}
+
+function alternarTV() {
+  naTV.value = !naTV.value
+  lembrar('tv', naTV.value ? '1' : '0')
+  if (naTV.value) {
+    enviarCena()
+    verTV()
+  } else {
+    clearTimeout(procurarTV)
+    api('/api/tv', { metodo: 'PUT', corpo: { ativo: false } }).catch(() => {})
+  }
+}
 
 function tocar() {
   if (!player || !cartao.value?.audio) return
@@ -59,6 +112,7 @@ async function aplicar(dados) {
   mostradoEm = Date.now()
   player?.pause()
   if (audioNaPergunta.value) tocar()
+  enviarCena()
   clearTimeout(espera)
   // Um cartão aprendendo volta ainda hoje: a tela se atualiza sozinha quando ele vencer.
   if (!dados.cartao && dados.espera_ate) {
@@ -80,6 +134,7 @@ async function carregar() {
 
 function mostrar() {
   mostrando.value = true
+  enviarCena()
   if (cartao.value?.audio && !audioNaPergunta.value) tocar()
 }
 
@@ -137,12 +192,16 @@ function aoTeclar(ev) {
 onMounted(() => {
   window.addEventListener('keydown', aoTeclar)
   carregar()
+  if (naTV.value) verTV()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', aoTeclar)
   clearTimeout(espera)
+  clearTimeout(procurarTV)
   player?.pause()
+  // Fora do estudo, a TV volta para a espera.
+  if (naTV.value) api('/api/tv', { metodo: 'PUT', corpo: { ativo: false } }).catch(() => {})
 })
 </script>
 
@@ -160,10 +219,25 @@ onBeforeUnmount(() => {
           <span class="revisar" :class="{ atual: fila === 'revisar' }" title="Para revisar">{{ estudo.contagem.revisar }}</span>
         </span>
       </div>
+      <button
+        class="botao icone"
+        :class="{ ligado: naTV }"
+        :aria-pressed="naTV"
+        :aria-label="naTV ? 'Parar de mostrar na TV' : 'Mostrar na TV'"
+        :title="naTV ? 'Parar de mostrar na TV' : 'Mostrar na TV'"
+        @click="alternarTV"
+      >
+        <Icone nome="tv" />
+      </button>
       <button class="botao icone" aria-label="Desfazer a última resposta" title="Desfazer (Z)" :disabled="!estudo?.feitos_hoje" @click="desfazer">
         <Icone nome="desfazer" />
       </button>
     </header>
+
+    <div v-if="naTV && tv && !tv.telas" class="aviso-tv" role="status">
+      <Icone nome="tv" />
+      <span>Na TV, abra o navegador (Internet) em <strong>{{ tv.endereco.replace(/^https?:\/\//, '') }}</strong>. Os cartões aparecem lá; você responde por aqui.</span>
+    </div>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
@@ -279,6 +353,33 @@ onBeforeUnmount(() => {
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+.ligado {
+  color: var(--marca);
+  background: var(--marca-fundo);
+}
+
+.aviso-tv {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 720px;
+  margin: 16px auto 0;
+  padding: 12px 14px;
+  border-radius: var(--raio);
+  background: var(--marca-fundo);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.aviso-tv :deep(svg) {
+  flex: none;
+  color: var(--marca);
+}
+
+.aviso-tv strong {
+  user-select: all;
 }
 
 .aviso {
