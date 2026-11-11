@@ -16,6 +16,7 @@ import { hora, intervalo } from './tempo.js'
 // se tivesse sido estudado por lá.
 // "Mostrar na TV" (F37): o celular continua sendo o estudo e manda cada cena à página da TV
 // (http://192.168.1.20:8453), que só mostra. A escolha fica guardada para a próxima vez.
+// Sem aviso do endereço na tela: atrapalhava o estudo.
 const props = defineProps({ escopo: { type: String, required: true } })
 const tema = computed(() => (props.escopo.startsWith('tema/') ? props.escopo.slice('tema/'.length) : ''))
 const todos = computed(() => props.escopo === 'tudo')
@@ -32,8 +33,6 @@ let mostradoEm = Date.now()
 let espera
 
 const naTV = ref(lembrar('tv') === '1')
-const tv = ref(null) // { endereco, telas }
-let procurarTV
 
 const NOTAS = [
   { valor: 1, nome: 'Errei', classe: 'errei', dica: 'Errei: rever daqui a pouco (1)' },
@@ -73,27 +72,11 @@ function enviarCena() {
   api('/api/tv', { metodo: 'PUT', corpo: cena }).catch(() => {})
 }
 
-async function verTV() {
-  try {
-    tv.value = await api('/api/tv')
-  } catch {
-    tv.value = null
-  }
-  clearTimeout(procurarTV)
-  // Enquanto nenhuma TV abriu a página, o aviso com o endereço fica e é conferido de novo.
-  if (naTV.value && !tv.value?.telas) procurarTV = setTimeout(verTV, 4000)
-}
-
 function alternarTV() {
   naTV.value = !naTV.value
   lembrar('tv', naTV.value ? '1' : '0')
-  if (naTV.value) {
-    enviarCena()
-    verTV()
-  } else {
-    clearTimeout(procurarTV)
-    api('/api/tv', { metodo: 'PUT', corpo: { ativo: false } }).catch(() => {})
-  }
+  if (naTV.value) enviarCena()
+  else api('/api/tv', { metodo: 'PUT', corpo: { ativo: false } }).catch(() => {})
 }
 
 function tocar() {
@@ -196,13 +179,11 @@ function aoTeclar(ev) {
 onMounted(() => {
   window.addEventListener('keydown', aoTeclar)
   carregar()
-  if (naTV.value) verTV()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', aoTeclar)
   clearTimeout(espera)
-  clearTimeout(procurarTV)
   player?.pause()
   // Fora do estudo, a TV volta para a espera.
   if (naTV.value) api('/api/tv', { metodo: 'PUT', corpo: { ativo: false } }).catch(() => {})
@@ -237,11 +218,6 @@ onBeforeUnmount(() => {
         <Icone nome="desfazer" />
       </button>
     </header>
-
-    <div v-if="naTV && tv && !tv.telas" class="aviso-tv" role="status">
-      <Icone nome="tv" />
-      <span>Na TV, abra o navegador (Internet) e digite o endereço inteiro, com <strong>http://</strong> no começo: <strong>{{ tv.endereco }}</strong>. Os cartões aparecem lá; você responde por aqui.</span>
-    </div>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
@@ -341,28 +317,6 @@ onBeforeUnmount(() => {
 .ligado {
   color: var(--marca);
   background: var(--marca-fundo);
-}
-
-.aviso-tv {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  max-width: 720px;
-  margin: 16px auto 0;
-  padding: 12px 14px;
-  border-radius: var(--raio);
-  background: var(--marca-fundo);
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-
-.aviso-tv :deep(svg) {
-  flex: none;
-  color: var(--marca);
-}
-
-.aviso-tv strong {
-  user-select: all;
 }
 
 .aviso {
