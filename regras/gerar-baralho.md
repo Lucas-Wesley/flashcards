@@ -1,6 +1,6 @@
 # Instruções: gerar um baralho de flashcards
 
-O Lucas pediu um baralho sobre um assunto. Monte os cartões. Ele revisa, edita e aprova cada um antes de estudar; você propõe.
+O Lucas pediu um baralho sobre um assunto. Monte os cartões. Ele revisa, edita e aprova cada um antes de estudar; você propõe. Depois de você, outra leitura confere a proposta (o conjunto completo, as respostas, as imagens) e aponta o que falhou ao Lucas.
 
 ## Primeiro, entenda o pedido
 
@@ -70,13 +70,23 @@ O app busca as imagens na Wikipédia e no Wikimedia Commons; você diz o que cad
 
 Algumas que funcionam bem:
 
-- **Bandeira de um país**: `Arquivo:Flag of <nome do país em inglês>.svg` (ex.: `Arquivo:Flag of Japan.svg`). De um estado brasileiro, o artigo da Wikipédia (ex.: "Bandeira de Pernambuco").
-- **Onde fica um país**: um globo centrado no país, pintado de verde, com o continente em volta, nem longe nem perto demais. Sempre com as alternativas, porque muitos países pequenos (ilhas do Caribe, microestados da Europa) não têm o primeiro: `Arquivo:Portugal (orthographic projection).svg | Arquivo:Portugal in its region.svg | Arquivo:Portugal on the globe (Europe centered).svg` (no terceiro, o continente do país em inglês: Europe, Africa, Asia, Oceania, North America, South America).
+- **Bandeira de um país**: `Arquivo:Flag of <nome do país em inglês>.svg` (ex.: `Arquivo:Flag of Japan.svg`). De um estado brasileiro, o artigo da Wikipédia (ex.: "Bandeira de Pernambuco"). Se a bandeira mudou nos últimos anos, o nome comum pode ainda apontar para a antiga: confira no Commons o arquivo da atual (ex.: `Arquivo:Flag of Vatican City (2023–present).svg`).
+- **Onde fica um país**: um globo centrado no país, pintado de verde, com o continente em volta, nem longe nem perto demais. Sempre com as alternativas, porque muitos países pequenos (ilhas do Caribe, microestados da Europa) não têm o primeiro: `Arquivo:Portugal (orthographic projection).svg | Arquivo:Portugal in its region.svg | Arquivo:Portugal on the globe (Europe centered).svg` (no terceiro, o continente do país em inglês: Europe, Africa, Asia, Oceania, North America, South America). Para um país muito pequeno, sem nenhum desses (o Vaticano), confira no Commons um mapa de localização dele (ex.: `Arquivo:Location Vatican City Europe.png`) e ponha como alternativa.
 
 Regras:
 
 - **Seja específico para cada cartão.** Se o cartão fala de outra época ou de um detalhe, o termo é desse cartão, não do assunto geral (num cartão sobre a bandeira de 1822, "Bandeira do Império do Brasil", e não "Bandeira do Brasil"). Inclua o ano quando a época importa.
+- **Num cartão de reconhecer pela imagem, a imagem da frente é o cartão**: sem ela, ele não funciona. Prefira o arquivo exato, com alternativas.
 - **Deixe vazio** quando a imagem não ajuda (datas, conceitos abstratos, vocabulário comum) ou quando nenhuma imagem mostraria a resposta deste cartão em vez da de outro.
+
+## Antes de devolver
+
+Confira, nesta ordem:
+
+1. **O formato é o que ele descreveu?** Releia o pedido e compare com dois ou três cartões: frente, verso e imagens.
+2. **O conjunto está completo?** Num conjunto fechado, compare a lista que você montou com os cartões, item por item: nenhum faltando, nenhum repetido.
+3. **A frente não entrega a resposta**, nem no texto.
+4. **Cada imagem é deste cartão**: o arquivo é do item certo, e da época certa.
 
 ## Campos
 

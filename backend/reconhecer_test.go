@@ -40,6 +40,14 @@ func TestBaralhoDeReconhecerPelaImagem(t *testing.T) {
 	if !strings.HasSuffix(brasil.ImagemURL, "/mapa-japan.png") {
 		t.Fatalf("alternativas: %+v", brasil)
 	}
+	// Os avisos (F40): o arquivo da frente não existia e a imagem veio da busca; a conferência
+	// viu o arquivo que veio no verso e apontou que é do Japão.
+	if len(japao.Avisos) != 0 || len(brasil.Avisos) != 2 || !strings.Contains(brasil.Avisos[0], "veio da busca") || brasil.Avisos[1] != "O mapa que veio é do Japão." {
+		t.Fatalf("avisos: japão %q, brasil %q", japao.Avisos, brasil.Avisos)
+	}
+	if c := p.Conferencia; c == nil || c.Resumo == "" || len(c.Faltando) != 1 || c.Faltando[0] != "Argentina" || c.Falhou != "" {
+		t.Fatalf("conferência: %+v", c)
+	}
 
 	var res struct {
 		BaralhoID   string `json:"baralho_id"`
@@ -75,6 +83,16 @@ func TestBaralhoDeReconhecerPelaImagem(t *testing.T) {
 	}
 	if s := e.pedir("POST", "/api/geracoes/"+id+"/aprovar", map[string]any{"cartoes": g.Proposta.Cartoes}, &res); s != http.StatusOK || res.Atualizadas != 2 || res.Criadas != 0 {
 		t.Fatalf("aprovar a atualização: %d %+v", s, res)
+	}
+}
+
+// A conferência caiu: a proposta segue para a revisão, com o motivo.
+func TestConferenciaQueFalha(t *testing.T) {
+	e := novoAmbiente(t)
+	t.Setenv("CLAUDE_FALSO_CONFERENCIA_FALHA", "1")
+	g := e.esperarGeracao(e.pedirGeracao(map[string]any{"pedido": "presidentes"}).ID, emRevisao)
+	if c := g.Proposta.Conferencia; c == nil || !strings.Contains(c.Falhou, "conferência caiu") || len(g.Proposta.Cartoes) != 2 {
+		t.Fatalf("conferência que falhou: %+v %+v", c, g.Proposta)
 	}
 }
 

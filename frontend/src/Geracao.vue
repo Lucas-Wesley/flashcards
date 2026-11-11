@@ -12,7 +12,8 @@ import { doLivro } from './fonte.js'
 // baralho criado, e os cartões que voltarem com a mesma frente atualizam os que já existem.
 // O baralho de destino pode ser trocado na revisão; um link sem baralho começa no "Inglês".
 // Na revisão, cada cartão aparece como no estudo (F39: a imagem da frente, a frente, o verso e a
-// imagem do verso); os campos só abrem em "Editar".
+// imagem do verso); os campos só abrem em "Editar". A conferência (F40) e as imagens que não vieram
+// deixam avisos nos cartões, e dá para ver só os com aviso.
 const props = defineProps({ id: { type: String, required: true } })
 const recado = inject('recado')
 
@@ -28,6 +29,7 @@ const enviando = ref(false)
 const editando = ref(false)
 const novoPedido = ref('')
 const novaQuantidade = ref('')
+const soComAviso = ref(false)
 let relogio
 
 const NOMES = {
@@ -135,6 +137,9 @@ function editar() {
 function ouvido(texto) {
   novoPedido.value = novoPedido.value.trim() ? `${novoPedido.value.trim()} ${texto}` : texto
 }
+
+const comAviso = computed(() => cartoes.value.filter((c) => c.avisos?.length).length)
+const conferencia = computed(() => g.value?.proposta?.conferencia)
 
 const todosMarcados = computed(() => cartoes.value.length > 0 && escolhidos.value.length === cartoes.value.length)
 function marcarTodos() {
@@ -267,6 +272,14 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
       <template v-else-if="g.estado === 'em_revisao'">
         <p v-if="g.proposta.entendimento" class="entendimento"><span class="rotulo-campo">A IA entendeu</span>{{ g.proposta.entendimento }}</p>
+        <div v-if="conferencia" class="conferencia" :class="{ falhou: conferencia.falhou }">
+          <span class="rotulo-campo">A conferência</span>
+          <template v-if="conferencia.falhou">Não rodou desta vez ({{ conferencia.falhou }}). Confira os cartões você mesmo.</template>
+          <template v-else>
+            <span>{{ conferencia.resumo }}</span>
+            <span v-if="conferencia.faltando?.length" class="faltando"><strong>Faltando:</strong> {{ conferencia.faltando.join(', ') }}.</span>
+          </template>
+        </div>
         <div v-if="g.proposta.observacoes" class="aviso observacoes"><strong v-if="!doLink">Da IA: </strong>{{ g.proposta.observacoes }}</div>
 
         <div class="destino">
@@ -289,16 +302,25 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
         <div class="contagem">
           <p class="rotulo">{{ escolhidos.length }} de {{ cartoes.length }} {{ cartoes.length === 1 ? 'cartão marcado' : 'cartões marcados' }}</p>
-          <button v-if="cartoes.length > 1" type="button" class="botao-link" @click="marcarTodos">{{ todosMarcados ? 'Desmarcar todos' : 'Marcar todos' }}</button>
+          <div class="linha-acoes">
+            <button v-if="comAviso" type="button" class="botao-link" @click="soComAviso = !soComAviso">
+              {{ soComAviso ? 'Ver todos' : comAviso === 1 ? 'Ver o cartão com aviso' : `Ver os ${comAviso} com aviso` }}
+            </button>
+            <button v-if="cartoes.length > 1" type="button" class="botao-link" @click="marcarTodos">{{ todosMarcados ? 'Desmarcar todos' : 'Marcar todos' }}</button>
+          </div>
         </div>
         <ul class="lista">
-          <li v-for="(c, i) in cartoes" :key="i" class="proposto" :class="{ fora: !c.incluir }">
+          <li v-for="(c, i) in cartoes" v-show="!soComAviso || c.avisos?.length" :key="i" class="proposto" :class="{ fora: !c.incluir }">
             <input v-model="c.incluir" type="checkbox" class="marcar" :aria-label="`Incluir o cartão ${i + 1}`" />
             <div class="campos">
               <div v-if="c.atualiza || c.fonte" class="chips">
                 <span v-if="c.atualiza" class="chip atualiza">Atualiza o que já existe</span>
                 <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : 'Texto no Acervo') }}</a>
               </div>
+
+              <ul v-if="c.avisos?.length" class="avisos-do-cartao">
+                <li v-for="(a, j) in c.avisos" :key="j">{{ a }}</li>
+              </ul>
 
               <template v-if="editandoCartao !== i">
                 <div class="previa" :class="{ leitura: g.tipo === 'leitura' }">
@@ -444,8 +466,42 @@ onBeforeUnmount(() => clearTimeout(relogio))
   line-height: 1.5;
 }
 
-.entendimento .rotulo-campo {
+.entendimento .rotulo-campo,
+.conferencia .rotulo-campo {
   font-family: var(--interface);
+}
+
+.conferencia {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--azul);
+  border-radius: var(--raio-p);
+  background: var(--superficie);
+  line-height: 1.5;
+}
+
+.conferencia.falhou {
+  border-left-color: var(--linha-forte);
+  color: var(--texto-suave);
+}
+
+.faltando {
+  color: var(--vermelho);
+}
+
+.avisos-do-cartao {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--raio-p);
+  background: var(--vermelho-fundo);
+  color: var(--vermelho);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  list-style: none;
 }
 
 .botao-link {

@@ -287,6 +287,14 @@ test('um baralho de reconhecer: a bandeira na frente, o nome no verso', async ({
   await expect(page.locator('.entendimento')).toContainText('a bandeira na frente')
   await expect(page.locator('.p-frente')).toHaveText(['De que país é esta bandeira?', 'De que país é esta bandeira?'])
   await expect(page.locator('.img-frente')).toHaveCount(2)
+  // A conferência (F40) diz se a proposta atende; os avisos ficam no cartão.
+  await expect(page.locator('.conferencia')).toBeVisible()
+  const comAviso = await page.locator('.avisos-do-cartao').count()
+  if (comAviso) {
+    await page.getByRole('button', { name: /com aviso/ }).click()
+    await expect(page.locator('.proposto:visible')).toHaveCount(comAviso)
+    await page.getByRole('button', { name: 'Ver todos' }).click()
+  }
   await page.getByLabel('Nome do baralho novo').fill('Bandeiras do mundo')
   await page.getByRole('button', { name: 'Criar baralho com 2 cartões' }).click()
   await expect(page.getByText('2 notas criadas.')).toBeVisible()

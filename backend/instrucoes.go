@@ -23,6 +23,7 @@ type instrucao struct {
 
 var instrucoes = []instrucao{
 	{Arquivo: "gerar-baralho.md", Nome: "Gerar um baralho", Descricao: "Como a IA monta os cartões a partir do seu pedido: o que vai na frente e no verso, quantos fatos por cartão, como conferir os fatos e quando sugerir uma imagem."},
+	{Arquivo: "conferir-baralho.md", Nome: "Conferir um baralho gerado", Descricao: "Como uma segunda leitura da IA confere a proposta antes da sua revisão: se o pedido foi entendido, se o conjunto está completo, se cada resposta e cada imagem são do item certo. Ela só aponta; os avisos aparecem nos cartões."},
 	{Arquivo: "gerar-do-texto.md", Nome: "Cartões de um texto do Acervo", Descricao: "Como a IA tira cartões de um Tema, capítulo ou Referência que você mandou do Acervo: o que vale virar cartão, o que fica de fora e como tratar as fontes do texto."},
 	{Arquivo: "gerar-leitura.md", Nome: "Cartões de leitura de um texto do Acervo", Descricao: "Como a IA resume um texto do Acervo em cartões de leitura: em geral um só, com uma pergunta aberta na frente e um resumo fiel no verso; mais de um só quando o texto muda de assunto."},
 	{Arquivo: "gerar-da-marcacao.md", Nome: "Cartões de uma marcação da Biblioteca", Descricao: "Como a IA faz o cartão de um trecho que você marcou num livro: em geral um só, sobre o trecho; a sua nota manda; vocabulário em livro de outro idioma, a ideia em livro de conteúdo."},

@@ -80,6 +80,8 @@ type proposta struct {
 	Entendimento string           `json:"entendimento,omitempty"`
 	Observacoes  string           `json:"observacoes"`
 	Cartoes      []cartaoProposto `json:"cartoes"`
+	// Conferencia (F40): o que a segunda leitura achou da proposta como um todo.
+	Conferencia *conferencia `json:"conferencia,omitempty"`
 }
 
 type cartaoProposto struct {
@@ -104,6 +106,11 @@ type cartaoProposto struct {
 	// link para ele, que a nota guarda para abrir no estudo.
 	Secao string `json:"secao,omitempty"`
 	Fonte string `json:"fonte,omitempty"`
+	// Avisos (F40): o que pede um olhar do Lucas neste cartão (uma imagem que não veio ou veio da
+	// busca, o que a conferência apontou).
+	Avisos []string `json:"avisos,omitempty"`
+	// O arquivo de cada imagem encontrada, para a conferência ver o que veio (não fica guardado).
+	tituloImagem, tituloImagemFrente string
 }
 
 const esquemaProposta = `{
@@ -220,8 +227,9 @@ func (f *filaDaIA) executar(ctx context.Context, g *geracao) {
 	case cancelou:
 		f.a.terminar(g.ID, cancelada, "", nil)
 	case esgotou:
-		f.a.terminar(g.ID, falhou, "A IA passou de 15 minutos sem terminar.", nil)
-		f.a.avisarGeracao(g, "A IA passou de 15 minutos sem terminar.")
+		msg := fmt.Sprintf("A IA passou de %d minutos sem terminar.", int(tempoMaximoDaGeracao.Minutes()))
+		f.a.terminar(g.ID, falhou, msg, nil)
+		f.a.avisarGeracao(g, msg)
 	case err != nil:
 		log.Printf("geração %d: %v", g.ID, err)
 		f.a.terminar(g.ID, falhou, err.Error(), nil)
@@ -372,6 +380,10 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	}
 
 	a.buscarFotosDaProposta(ctx, p.Cartoes)
+	// Os cartões de um texto do Acervo ou de uma marcação saem só do texto, que a conferência não lê.
+	if !g.doTexto() {
+		a.conferir(ctx, g, &p, pasta)
+	}
 	return &p, nil
 }
 
@@ -382,19 +394,27 @@ const buscasAoMesmoTempo = 2
 // buscarFotosDaProposta: as fotos vêm do que a IA indicou. Os arquivos exatos do Commons
 // ("Arquivo:Flag of Japan.svg") vêm todos juntos, em lotes; o resto (e o arquivo que não existe)
 // vem da busca pelo termo, ordenada pelo cartão inteiro (frente, verso e tags). Sem foto, o
-// cartão segue sem imagem.
+// cartão segue sem imagem. A foto que não veio, e a que veio da busca no lugar de um arquivo
+// exato (no baralho dos países, a lua no lugar do mapa de Liechtenstein), ficam como aviso no
+// cartão (F40).
 func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoProposto) {
 	type pedidoDeFoto struct {
+		cartao          int
+		lado            string
 		termo, contexto string
-		destino         *string
+		destino, titulo *string
+		buscou          bool // veio da busca pelo termo, não de um arquivo pedido
 	}
-	var pedidos []pedidoDeFoto
+	var pedidos []*pedidoDeFoto
 	var nomes []string
 	vistos := map[string]bool{}
 	for i := range cartoes {
 		c := &cartoes[i]
 		contexto := c.Frente + "\n" + c.Verso + "\n" + c.Tags
-		for _, p := range []pedidoDeFoto{{c.Imagem, contexto, &c.ImagemURL}, {c.ImagemFrente, contexto, &c.ImagemFrenteURL}} {
+		for _, p := range []*pedidoDeFoto{
+			{cartao: i, lado: "do verso", termo: c.Imagem, contexto: contexto, destino: &c.ImagemURL, titulo: &c.tituloImagem},
+			{cartao: i, lado: "da frente", termo: c.ImagemFrente, contexto: contexto, destino: &c.ImagemFrenteURL, titulo: &c.tituloImagemFrente},
+		} {
 			if p.termo == "" || *p.destino != "" {
 				continue
 			}
@@ -414,7 +434,7 @@ func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoPropost
 	for _, p := range pedidos {
 		alternativas := alternativasDoTermo(p.termo)
 		if im, achou := primeiroAchado(arquivosDoTermo(alternativas), exatos); achou {
-			*p.destino = im.URL
+			*p.destino, *p.titulo = im.URL, im.Titulo
 			continue
 		}
 		// Nenhum arquivo existe: busca pelo primeiro termo, sem conferir os arquivos de novo.
@@ -431,11 +451,22 @@ func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoPropost
 				return
 			}
 			if achadas, err := a.buscarNasFontes(ctx, termo, p.contexto, 1, false); err == nil && len(achadas) > 0 {
-				*p.destino = achadas[0].URL
+				*p.destino, *p.titulo, p.buscou = achadas[0].URL, achadas[0].Titulo, true
 			}
 		}()
 	}
 	wg.Wait()
+
+	for _, p := range pedidos {
+		c := &cartoes[p.cartao]
+		pediuArquivo := len(arquivosDoTermo(alternativasDoTermo(p.termo))) > 0
+		switch {
+		case *p.destino == "":
+			c.Avisos = append(c.Avisos, fmt.Sprintf("A imagem %s não veio (a IA pediu: %s).", p.lado, p.termo))
+		case p.buscou && pediuArquivo:
+			c.Avisos = append(c.Avisos, fmt.Sprintf("O arquivo pedido para a imagem %s não existe; veio da busca (%s). Confira.", p.lado, *p.titulo))
+		}
+	}
 }
 
 // chaveDaNota: a frente identifica a nota no baralho; com imagem na frente, a frente pode ser a

@@ -18,6 +18,12 @@ case "$prompt" in *"REGRA EDITADA"*) obs="$obs Seguiu a instrução editada." ;;
 case "$prompt" in *"Ele já tem estes cartões"*) obs="$obs Recebeu os cartões existentes." ;; esac
 case "$prompt" in *"PEDIDO EDITADO"*) obs="$obs Recebeu o pedido editado." ;; esac
 case "$prompt" in *"o Lucas não disse; decida pelo pedido"*) obs="$obs Sem quantidade." ;; esac
+case "$prompt" in *"Confira a proposta de flashcards"*)
+  entrada=$(cat)
+  [ -n "$CLAUDE_FALSO_CONFERENCIA_FALHA" ] && { printf '{"result":"conferência caiu","is_error":true}\n'; exit 1; }
+  case "$entrada" in *"[2]"*"Verso: Brasil"*"veio Japan (orthographic projection)"*)
+    printf '{"type":"result","result":"","is_error":false,"structured_output":{"resumo":"Faltam países; o mapa do Brasil é do Japão.","faltando":["Argentina"," "],"problemas":[{"cartao":2,"problema":"O mapa que veio é do Japão."},{"cartao":99,"problema":"fora da lista"}]}}\n'; exit 0 ;; esac
+  printf '{"type":"result","result":"","is_error":false,"structured_output":{"resumo":"Atende ao pedido.","faltando":[],"problemas":[]}}\n'; exit 0 ;; esac
 case "$prompt" in *"BANDEIRAS DO MUNDO"*)
   printf '{"type":"result","result":"","is_error":false,"structured_output":{"nome_baralho":"Bandeiras do mundo","entendimento":"Um cartão por país: a bandeira na frente; no verso, o nome e o mapa.","observacoes":"%s","cartoes":[{"frente":"De que país é esta bandeira?","verso":"Japão","tags":"bandeiras","imagem_frente":"Arquivo:Flag of Japan.svg","imagem":"Arquivo:Japan (orthographic projection).svg"},{"frente":"De que país é esta bandeira?","verso":"Brasil","tags":"bandeiras","imagem_frente":"Arquivo:Bandeira do Brasil.svg","imagem":"Arquivo:Brazil (orthographic projection).svg | Arquivo:Japan (orthographic projection).svg"}]}}\n' "$obs"; exit 0 ;; esac
 case "$prompt" in *"Escolha as 3 mais didáticas"*)
