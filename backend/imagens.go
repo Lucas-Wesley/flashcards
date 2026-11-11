@@ -23,6 +23,8 @@ import (
 //   - da busca em fontes abertas (busca.go). É assim que a IA "acha" imagens: ela diz o que a foto
 //     deve mostrar, e o servidor busca, sem a IA navegar;
 //   - do aparelho, enviadas pelo editor.
+// Os áudios vêm da página de um link (a pronúncia da frase) ou de outro app: o Streaming manda o
+// trecho do filme com a fala (POST /api/audios) antes de criar a nota.
 
 const tamanhoMaximoDeImagem = 8 << 20
 
@@ -57,6 +59,11 @@ func (a *app) baixarAudio(ctx context.Context, endereco string) (string, error) 
 		return "", err
 	}
 	defer r.Close()
+	return a.guardarAudio(r)
+}
+
+// guardarAudio confere pelo conteúdo que é um MP3 e grava.
+func (a *app) guardarAudio(r io.Reader) (string, error) {
 	dados, err := lerAte(r, "áudio")
 	if err != nil {
 		return "", err
@@ -293,4 +300,20 @@ func (p *proposta) cartoesOuNada() []cartaoProposto {
 		return nil
 	}
 	return p.Cartoes
+}
+
+func (a *app) handleEnviarAudio(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, tamanhoMaximoDeImagem+1<<20)
+	arquivo, _, err := r.FormFile("arquivo")
+	if err != nil {
+		erroJSON(w, http.StatusBadRequest, "Envie um MP3 de até 8 MB.")
+		return
+	}
+	defer arquivo.Close()
+	nome, err := a.guardarAudio(arquivo)
+	if err != nil {
+		erroJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"nome": nome})
 }

@@ -253,6 +253,43 @@ func TestImagens(t *testing.T) {
 	}
 }
 
+// O Streaming manda o trecho do filme com a fala; a nota guarda o nome e o estudo toca.
+func TestEnviarAudio(t *testing.T) {
+	e := novoAmbiente(t)
+	enviar := func(conteudo []byte) (int, string) {
+		var corpo bytes.Buffer
+		m := multipart.NewWriter(&corpo)
+		f, _ := m.CreateFormFile("arquivo", "fala.mp3")
+		f.Write(conteudo)
+		m.Close()
+		res, err := http.Post(e.srv.URL+"/api/audios", m.FormDataContentType(), &corpo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var r map[string]string
+		jsonDecode(res, &r)
+		return res.StatusCode, r["nome"]
+	}
+	mp3 := append([]byte("ID3\x04\x00\x00\x00\x00\x00\x00"), bytes.Repeat([]byte{0xFF, 0xFB, 0x90, 0x00}, 64)...)
+	s, nome := enviar(mp3)
+	if s != http.StatusOK || !nomeDeAudio.MatchString(nome) {
+		t.Fatalf("enviar: %d %q", s, nome)
+	}
+	if s, _ := enviar([]byte("<html>não é áudio</html>")); s != http.StatusBadRequest {
+		t.Errorf("aceitou o que não é MP3: %d", s)
+	}
+	b := e.criarBaralho("Inglês")
+	var n nota
+	e.pedir("POST", "/api/notas", dadosDaNota{BaralhoID: b.ID, Frente: "x", Audio: nome}, &n)
+	if n.Audio != nome {
+		t.Fatalf("nota com áudio: %+v", n)
+	}
+	if res, _ := http.Get(e.srv.URL + "/api/audios/" + nome); res.StatusCode != http.StatusOK {
+		t.Errorf("áudio guardado: %d", res.StatusCode)
+	}
+}
+
 // Um banco da primeira versão, sem a coluna de imagem, ganha a coluna ao abrir.
 func TestMigraBancoAntigo(t *testing.T) {
 	caminho := filepath.Join(t.TempDir(), "antigo.db")
