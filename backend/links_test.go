@@ -65,7 +65,6 @@ func TestCartoesDeUmLink(t *testing.T) {
 	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", nil, nil); s != http.StatusConflict {
 		t.Errorf("refazer um link pela IA: %d", s)
 	}
-
 	var res struct {
 		SemAudio int `json:"sem_audio"`
 	}
@@ -90,6 +89,15 @@ func TestCartoesDeUmLink(t *testing.T) {
 	e.pedir("POST", "/api/links", map[string]string{"url": link}, &g)
 	if g.Proposta.NomeBaralho != "Run Into" || len(g.Proposta.Cartoes) != 3 || g.PodeRefazer {
 		t.Fatalf("baralho novo: %+v (pode refazer: %v)", g.Proposta, g.PodeRefazer)
+	}
+	// Com uma instrução extra (F42), mesmo as 3 frases prontas passam pela IA.
+	var refeito geracao
+	if s := e.pedir("POST", "/api/geracoes/"+strconv.FormatInt(g.ID, 10)+"/refazer", map[string]any{"instrucao": "FRASES CURTAS"}, &refeito); s != http.StatusOK || refeito.Estado != naFila {
+		t.Fatalf("refazer com instrução: %d %+v", s, refeito)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+	if len(g.Proposta.Cartoes) == 0 || !strings.Contains(g.Proposta.Observacoes, "Recebeu a instrução extra.") {
+		t.Fatalf("link refeito com instrução: %+v", g.Proposta)
 	}
 	// Excluir apaga o pedido.
 	excluido := "/api/geracoes/" + strconv.FormatInt(g.ID, 10)
@@ -150,6 +158,22 @@ func TestLinkComMuitasFrasesAIAEscolheAsMaisDidaticas(t *testing.T) {
 	}
 	if g = e.esperarGeracao(g.ID, emRevisao); len(g.Proposta.Cartoes) != 3 {
 		t.Errorf("nova escolha: %+v", g.Proposta)
+	}
+
+	// Refazer com uma instrução extra e 5 frases (F42): a IA recebe as duas, e a instrução fica no pedido.
+	corpo := map[string]any{"instrucao": "  prefira FRASES CURTAS ", "quantidade": 5}
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", corpo, &g); s != http.StatusOK || g.Instrucao != "prefira FRASES CURTAS" || g.Quantidade != 5 {
+		t.Fatalf("refazer com instrução: %d %+v", s, g)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+	if len(g.Proposta.Cartoes) != 5 || !strings.Contains(g.Proposta.Observacoes, "Recebeu a instrução extra.") {
+		t.Errorf("com instrução: %d cartões, %q", len(g.Proposta.Cartoes), g.Proposta.Observacoes)
+	}
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", map[string]any{"quantidade": maximoDeExemplos + 1}, nil); s != http.StatusBadRequest {
+		t.Errorf("frases demais: %d", s)
+	}
+	if s := e.pedir("POST", "/api/geracoes/"+id+"/refazer", map[string]any{"instrucao": strings.Repeat("a", maximoDaInstrucao+1)}, nil); s != http.StatusBadRequest {
+		t.Errorf("instrução longa demais: %d", s)
 	}
 }
 

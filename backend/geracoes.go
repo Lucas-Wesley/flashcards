@@ -39,10 +39,16 @@ const tempoMaximoDaGeracao = 30 * time.Minute
 // grande, como os países do mundo.
 const maximoDeCartoes = 300
 
+// maximoDaInstrucao (F42): a instrução extra de um link ou de um texto é curta, não um pedido novo.
+const maximoDaInstrucao = 1000
+
 type geracao struct {
 	ID     int64  `json:"id"`
 	Origem string `json:"origem"`
 	Pedido string `json:"pedido"`
+	// Instrucao (F42): o que o Lucas acrescentou ao refazer um link ou um texto do Acervo ("quero 5
+	// frases", "foque nas datas"), que não tem um pedido escrito para editar.
+	Instrucao string `json:"instrucao,omitempty"`
 	// Num texto do Acervo: o texto (só a IA lê), onde ele fica (Tema › capítulo) e o link de volta.
 	Texto    string `json:"-"`
 	Contexto string `json:"contexto,omitempty"`
@@ -70,7 +76,7 @@ func (g *geracao) podeRefazer() bool {
 		return true
 	}
 	var p paginaDoLink
-	return json.Unmarshal([]byte(g.Texto), &p) == nil && (p.Texto != "" || len(p.Frases) > exemplosPorPagina)
+	return json.Unmarshal([]byte(g.Texto), &p) == nil && (p.Texto != "" || len(p.Frases) > g.exemplos())
 }
 
 type proposta struct {
@@ -138,12 +144,12 @@ const esquemaProposta = `{
   "required": ["nome_baralho", "cartoes"]
 }`
 
-const colunasGeracao = `id, origem, pedido, texto, contexto, link, nome_sugerido, secoes, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
+const colunasGeracao = `id, origem, pedido, instrucao, texto, contexto, link, nome_sugerido, secoes, quantidade, tipo, baralho_id, estado, erro, proposta, resultado, criado_em, iniciado_em, terminado_em`
 
 func lerGeracao(l linha) (*geracao, error) {
 	var g geracao
 	var p string
-	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Texto, &g.Contexto, &g.Link, &g.NomeSugerido, &g.Secoes, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
+	if err := l.Scan(&g.ID, &g.Origem, &g.Pedido, &g.Instrucao, &g.Texto, &g.Contexto, &g.Link, &g.NomeSugerido, &g.Secoes, &g.Quantidade, &g.Tipo, &g.BaralhoID, &g.Estado, &g.Erro, &p, &g.Resultado,
 		&g.CriadoEm, &g.IniciadoEm, &g.TerminadoEm); err != nil {
 		return nil, err
 	}
@@ -283,6 +289,15 @@ func textoDaQuantidade(n int) string {
 		"conjunto completo (todos os estados, todos os países), cubra o conjunto inteiro e diga em observacoes que passou do número.", n)
 }
 
+// textoDaInstrucao (F42): a instrução extra do Lucas, quando houver, no fim do pedido à IA.
+func (g *geracao) textoDaInstrucao() string {
+	if strings.TrimSpace(g.Instrucao) == "" {
+		return ""
+	}
+	return fmt.Sprintf("\n\nInstrução extra do Lucas para este pedido (vale mais que os critérios padrão das instruções, "+
+		"sem quebrar as regras de fonte delas): %q", strings.TrimSpace(g.Instrucao))
+}
+
 func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	pasta := filepath.Join(a.cfg.dados, "geracoes", strconv.FormatInt(g.ID, 10))
 	if err := os.MkdirAll(pasta, 0o755); err != nil {
@@ -324,6 +339,7 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	if g.doTexto() {
 		pedido = pedidoDoTexto(g, destino, pasta)
 	}
+	pedido.instrucao += g.textoDaInstrucao()
 	if g.Origem == "link" {
 		return a.escolherExemplos(ctx, g, pasta)
 	}
@@ -658,9 +674,11 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, terminado_em = ? WHERE id = ? AND estado = ?`, cancelada, a.agora(), id, naFila)
 	case "refazer":
 		// Quantidade: ausente, fica a do pedido; 0, a IA decide (F39).
+		// Instrucao (F42): presente, troca a instrução extra (vazia, apaga).
 		var corpo struct {
-			Pedido     string `json:"pedido"`
-			Quantidade *int   `json:"quantidade"`
+			Pedido     string  `json:"pedido"`
+			Quantidade *int    `json:"quantidade"`
+			Instrucao  *string `json:"instrucao"`
 		}
 		if r.ContentLength != 0 && !lerCorpo(w, r, &corpo) {
 			return
@@ -674,8 +692,26 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		// Um link só é refeito quando passou pela IA (a página tinha mais de 3 frases, ou não as mostrava prontas).
-		if g, err := a.geracao(ctx, id); err == nil && !g.podeRefazer() {
+		instrucao := ""
+		if corpo.Instrucao != nil {
+			instrucao = strings.TrimSpace(*corpo.Instrucao)
+			if len([]rune(instrucao)) > maximoDaInstrucao {
+				erroJSON(w, http.StatusBadRequest, fmt.Sprintf("A instrução vai até %d caracteres.", maximoDaInstrucao))
+				return
+			}
+		}
+		g, gerr := a.geracao(ctx, id)
+		// Num texto do Acervo, a quantidade é um teto: 0 não quer dizer nada, e fica a do pedido.
+		if gerr == nil && g.doTexto() && quantidade == 0 {
+			quantidade = -1
+		}
+		if gerr == nil && g.Origem == "link" && quantidade > maximoDeExemplos {
+			erroJSON(w, http.StatusBadRequest, fmt.Sprintf("Um link dá até %d frases.", maximoDeExemplos))
+			return
+		}
+		// Um link só é refeito quando passa pela IA: a página tinha mais frases que as pedidas, não as mostrava
+		// prontas, ou agora vai com uma instrução ou outra quantidade (F42).
+		if gerr == nil && !g.podeRefazer() && instrucao == "" && quantidade < 0 {
 			erroJSON(w, http.StatusConflict, "Este link não passou pela IA: não há o que refazer.")
 			return
 		}
@@ -683,10 +719,11 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 		res, err = a.db.ExecContext(ctx, `UPDATE geracoes SET estado = ?, erro = '', proposta = '', iniciado_em = '', terminado_em = '',
 				pedido = CASE WHEN ? = '' THEN pedido ELSE ? END,
 				quantidade = CASE WHEN ? < 0 THEN quantidade ELSE ? END,
+				instrucao = CASE WHEN ? THEN ? ELSE instrucao END,
 				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
 				resultado = ''
-			WHERE id = ? AND origem IN ('ia', 'acervo', 'link') AND estado IN (?, ?, ?, ?, ?)`,
-			naFila, corpo.Pedido, corpo.Pedido, quantidade, quantidade, concluida,
+			WHERE id = ? AND origem IN ('ia', 'acervo', 'biblioteca', 'link') AND estado IN (?, ?, ?, ?, ?)`,
+			naFila, corpo.Pedido, corpo.Pedido, quantidade, quantidade, corpo.Instrucao != nil, instrucao, concluida,
 			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()
 	case "descartar":

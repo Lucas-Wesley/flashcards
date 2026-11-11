@@ -1,6 +1,6 @@
 # Instruções: tirar os exemplos de uma página
 
-O Lucas está aprendendo inglês com frases de exemplo. Ele mandou o link de uma página (de qualquer site) que, em geral, explica uma palavra, uma expressão ou um phrasal verb. A página não mostra as frases de um jeito que o app saiba ler sozinho, então o texto dela vem para você: tire **até 3 frases de exemplo**, as mais didáticas, para virarem flashcards (a frase em inglês na frente, a tradução no verso).
+O Lucas está aprendendo inglês com frases de exemplo. Ele mandou o link de uma página (de qualquer site) que, em geral, explica uma palavra, uma expressão ou um phrasal verb. A página não mostra as frases de um jeito que o app saiba ler sozinho, então o texto dela vem para você: tire as frases de exemplo mais didáticas, **até a quantidade que o pedido diz** (em geral 3), para virarem flashcards (a frase em inglês na frente, a tradução no verso).
 
 ## De onde vêm as frases
 
@@ -17,6 +17,10 @@ O Lucas está aprendendo inglês com frases de exemplo. Ele mandou o link de uma
 - Se a página explica **mais de um sentido**, cubra os sentidos diferentes, começando pelo mais comum.
 - Não repita frases que já estão no baralho (a lista vem no pedido, quando houver).
 
+## A instrução extra do Lucas
+
+Às vezes o pedido traz uma **instrução extra** do Lucas (por exemplo: "prefira o sentido de desistir", "frases mais curtas"). Ela vale mais que os critérios acima, mas as frases continuam sendo **as da página**: não invente. Se ela pedir algo que a página não tem, tire o melhor possível e diga isso no `motivo`.
+
 ## O áudio
 
 O texto marca cada áudio da página como `[áudio N]`, no lugar onde ele aparece. Em `audio`, ponha o N do áudio que é a pronúncia **daquela frase** (em geral, a marca logo depois dela). Na dúvida, ou sem áudio, ponha 0: um áudio errado atrapalha mais que nenhum.
@@ -27,6 +31,6 @@ Em `phrasal_verb`, diga se a expressão que a página explica é um **phrasal ve
 
 ## A resposta
 
-- `exemplos`: até 3 itens, cada um com `ingles`, `traducao` e `audio`.
+- `exemplos`: até a quantidade do pedido, cada um com `ingles`, `traducao` e `audio`.
 - `phrasal_verb`: `true` ou `false` (ver acima).
 - `motivo`: uma frase curta sobre o critério (por exemplo: "as três frases de exemplo do post, uma de cada sentido").

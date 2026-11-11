@@ -30,6 +30,10 @@ const editando = ref(false)
 const novoPedido = ref('')
 const novaQuantidade = ref('')
 const soComAviso = ref(false)
+// "Pedir algo a mais" (F42): num link ou num texto do Acervo, que não têm um pedido escrito para editar.
+const pedindoMais = ref(false)
+const instrucao = ref('')
+const quantidadeMais = ref('')
 let relogio
 
 const NOMES = {
@@ -134,6 +138,33 @@ function editar() {
   editando.value = true
 }
 
+function abrirPedirMais() {
+  instrucao.value = g.value.instrucao || ''
+  quantidadeMais.value = doLink.value ? g.value.quantidade || 3 : g.value.quantidade || ''
+  pedindoMais.value = true
+}
+
+function ouvidoMais(texto) {
+  instrucao.value = instrucao.value.trim() ? `${instrucao.value.trim()} ${texto}` : texto
+}
+
+async function pedirMais() {
+  if (g.value.estado === 'em_revisao' && !confirm('Refazer troca a proposta atual pela nova. Continuar?')) return
+  enviando.value = true
+  try {
+    const corpo = { instrucao: instrucao.value }
+    if (Number(quantidadeMais.value)) corpo.quantidade = Number(quantidadeMais.value)
+    g.value = await api(`/api/geracoes/${props.id}/refazer`, { metodo: 'POST', corpo })
+    pedindoMais.value = false
+    cartoes.value = []
+    carregar()
+  } catch (e) {
+    recado(e.message, true)
+  } finally {
+    enviando.value = false
+  }
+}
+
 function ouvido(texto) {
   novoPedido.value = novoPedido.value.trim() ? `${novoPedido.value.trim()} ${texto}` : texto
 }
@@ -149,7 +180,7 @@ function marcarTodos() {
 
 // A quantidade do pedido: em branco (0), a IA decidiu.
 const textoDaQuantidade = computed(() => {
-  if (doLink.value) return ''
+  if (doLink.value) return g.value.quantidade && g.value.quantidade !== 3 ? `${g.value.quantidade} frases · ` : ''
   if (doAcervo.value) return `até ${g.value.quantidade} · `
   return g.value.quantidade ? `cerca de ${g.value.quantidade} · ` : ''
 })
@@ -197,11 +228,15 @@ onBeforeUnmount(() => clearTimeout(relogio))
 
     <template v-if="g">
       <h1>{{ doLink ? 'Cartões do link' : daMarcacao ? 'Cartão da marcação' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
-      <p v-if="doLink" class="pedido link"><a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a></p>
+      <p v-if="doLink" class="pedido link">
+        <a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a>
+        <button v-if="!trabalhando && !pedindoMais" type="button" class="botao editar" @click="abrirPedirMais">Pedir algo a mais</button>
+      </p>
       <p v-else-if="doAcervo" class="pedido">
         {{ g.pedido }}
         <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir {{ daMarcacao ? 'no livro' : 'no Acervo' }}</a>
         <button v-if="!trabalhando && g.estado !== 'em_revisao'" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
+        <button v-if="!trabalhando && !pedindoMais" type="button" class="botao editar" @click="abrirPedirMais">Pedir algo a mais</button>
       </p>
       <form v-else-if="editando" class="edicao" @submit.prevent="refazer">
         <div class="caixa">
@@ -232,6 +267,32 @@ onBeforeUnmount(() => clearTimeout(relogio))
         “{{ g.pedido }}”
         <button v-if="podeRefazer" type="button" class="botao editar" @click="editar">Editar e refazer</button>
       </p>
+      <form v-if="pedindoMais" class="edicao" @submit.prevent="pedirMais">
+        <span class="rotulo-campo">O que mudar ou acrescentar</span>
+        <div class="caixa">
+          <textarea
+            v-model="instrucao"
+            class="campo"
+            rows="3"
+            maxlength="1000"
+            aria-label="O que mudar ou acrescentar"
+            :placeholder="doLink ? 'Ex.: prefira o sentido de desistir; frases mais curtas' : 'Ex.: mais cartões sobre as datas; deixe os nomes de fora'"
+            @keydown.ctrl.enter="pedirMais"
+            @keydown.meta.enter="pedirMais"
+          />
+          <Microfone class="falar" @texto="ouvidoMais" />
+        </div>
+        <label class="quantos">
+          <span class="rotulo-campo">{{ doLink ? 'Quantas frases' : 'No máximo quantos cartões' }}</span>
+          <input v-model="quantidadeMais" class="campo" type="number" min="1" :max="doLink ? 10 : 300" aria-label="Quantidade" />
+        </label>
+        <p v-if="doLink" class="suave dica">As frases e os áudios continuam os da página: a IA só escolhe. Se a página tiver menos frases que o pedido, vêm todas.</p>
+        <div class="linha-acoes">
+          <button class="botao principal" :disabled="enviando">{{ enviando ? 'Enviando…' : 'Refazer com isto' }}</button>
+          <button type="button" class="botao" @click="pedindoMais = false">Cancelar</button>
+        </div>
+      </form>
+      <p v-else-if="(doLink || doAcervo) && g.instrucao" class="instrucao"><span class="rotulo-campo">Você pediu</span>{{ g.instrucao }}</p>
       <p class="meta">
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
@@ -245,7 +306,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
             g.estado === 'na_fila'
               ? 'Esperando a vez: a IA faz um pedido por vez.'
               : doLink
-                ? 'Ela lê as frases da página e escolhe as 3 mais didáticas; costuma levar menos de um minuto.'
+                ? `Ela lê as frases da página e escolhe as ${g.quantidade || 3} mais didáticas; costuma levar menos de um minuto.`
                 : daMarcacao
                   ? 'Ela lê o trecho marcado e monta a frente e o verso; costuma levar um ou dois minutos.'
                   : doAcervo
@@ -432,6 +493,12 @@ onBeforeUnmount(() => clearTimeout(relogio))
   resize: vertical;
 }
 
+.instrucao {
+  margin: 0 0 8px;
+}
+.instrucao .rotulo-campo {
+  display: block;
+}
 .quantos {
   display: grid;
   gap: 6px;

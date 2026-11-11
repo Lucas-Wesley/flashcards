@@ -100,6 +100,12 @@ test('monta cartões a partir de um link compartilhado', async ({ page }) => {
   await expect(page.getByLabel('Nome do baralho novo')).toHaveCount(0)
   // Até 3 frases prontas não passam pela IA: não há o que refazer.
   await expect(page.getByRole('button', { name: 'Refazer' })).toHaveCount(0)
+  // Mas dá para pedir algo a mais (F42): a instrução e quantas frases, com 3 de partida.
+  await page.getByRole('button', { name: 'Pedir algo a mais' }).click()
+  await expect(page.getByLabel('O que mudar ou acrescentar')).toBeVisible()
+  await expect(page.getByLabel('Quantidade')).toHaveValue('3')
+  await page.getByRole('button', { name: 'Cancelar' }).click()
+  await expect(page.getByLabel('O que mudar ou acrescentar')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Excluir' })).toBeVisible()
   await page.getByRole('button', { name: 'Adicionar 3 ao baralho' }).click()
   // O áudio do terceiro aponta para um servidor que não existe: o cartão entra sem ele.

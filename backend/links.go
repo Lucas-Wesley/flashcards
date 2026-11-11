@@ -427,6 +427,17 @@ func (a *app) handleLink(w http.ResponseWriter, r *http.Request) {
 // não tem, a IA tira os exemplos do texto (regras/extrair-exemplos.md). As duas são editáveis em Ajustes.
 const exemplosPorPagina = 3
 
+// maximoDeExemplos (F42): ao refazer um link, o Lucas pode pedir mais frases que as 3, até este teto.
+const maximoDeExemplos = 10
+
+// exemplos: quantas frases o link dá; o padrão é 3, e o refazer pode pedir outro número (F42).
+func (g *geracao) exemplos() int {
+	if g.Quantidade <= 0 {
+		return exemplosPorPagina
+	}
+	return min(g.Quantidade, maximoDeExemplos)
+}
+
 // paginaDoLink é o que o leitor tirou da página, guardado no pedido para a IA (e para refazer).
 type paginaDoLink struct {
 	Titulo    string           `json:"titulo"`
@@ -491,6 +502,12 @@ func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*
 	if p.Texto != "" {
 		return a.extrairExemplos(ctx, g, p, pasta)
 	}
+	n := g.exemplos()
+	if len(p.Frases) <= n && strings.TrimSpace(g.Instrucao) == "" {
+		pr := p.proposta(p.Frases, "")
+		return &pr, nil
+	}
+	n = min(n, len(p.Frases))
 	var lista strings.Builder
 	for i, f := range p.Frases {
 		fmt.Fprintf(&lista, "%d. %s\n   %s\n", i+1, f.Ingles, strings.ReplaceAll(f.Traducao, "\n", " "))
@@ -500,8 +517,8 @@ func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*
 		regra: "escolher-exemplos.md",
 		instrucao: fmt.Sprintf("Página sobre %q (%s). Ela tem estas frases de exemplo, numeradas (inglês e tradução):\n\n%s\n"+
 			"Escolha as %d mais didáticas para virarem flashcards. Devolva os números delas em escolhidas; em phrasal_verb, se a expressão da página é um phrasal verb; "+
-			"e, em motivo, uma frase curta dizendo o critério.",
-			p.Titulo, g.Pedido, lista.String(), exemplosPorPagina),
+			"e, em motivo, uma frase curta dizendo o critério.%s",
+			p.Titulo, g.Pedido, lista.String(), n, g.textoDaInstrucao()),
 		esquema:     esquemaEscolha,
 		semInternet: true,
 	})
@@ -516,11 +533,11 @@ func (a *app) escolherExemplos(ctx context.Context, g *geracao, pasta string) (*
 	if err := dadosDaResposta(r, &escolha); err != nil {
 		return nil, err
 	}
-	// Na ordem da página, sem repetir, só números que existem, no máximo 3.
+	// Na ordem da página, sem repetir, só números que existem, no máximo os pedidos.
 	marcadas := map[int]bool{}
-	for _, n := range escolha.Escolhidas {
-		if n >= 1 && n <= len(p.Frases) && len(marcadas) < exemplosPorPagina {
-			marcadas[n] = true
+	for _, e := range escolha.Escolhidas {
+		if e >= 1 && e <= len(p.Frases) && len(marcadas) < n {
+			marcadas[e] = true
 		}
 	}
 	var frases []fraseDeExemplo
@@ -555,8 +572,8 @@ func (a *app) extrairExemplos(ctx context.Context, g *geracao, p paginaDoLink, p
 		regra: "extrair-exemplos.md",
 		instrucao: fmt.Sprintf("Página %q (%s). O texto dela vem pela entrada; os negritos estão marcados com **. %s%s\n\n"+
 			"Tire até %d frases de exemplo em inglês, as mais didáticas, com a tradução. Em audio, o número N do [áudio N] daquela frase, ou 0. "+
-			"Em phrasal_verb, se a expressão que a página explica é um phrasal verb. Em motivo, uma frase curta dizendo o critério.",
-			p.Titulo, g.Pedido, audios, existentes, exemplosPorPagina),
+			"Em phrasal_verb, se a expressão que a página explica é um phrasal verb. Em motivo, uma frase curta dizendo o critério.%s",
+			p.Titulo, g.Pedido, audios, existentes, g.exemplos(), g.textoDaInstrucao()),
 		entrada:     p.Texto,
 		esquema:     esquemaExtracao,
 		semInternet: true,
@@ -580,7 +597,7 @@ func (a *app) extrairExemplos(ctx context.Context, g *geracao, p paginaDoLink, p
 	vistas := map[string]bool{}
 	for _, e := range extracao.Exemplos {
 		f := fraseDeExemplo{Ingles: limparEspacos(strings.ReplaceAll(e.Ingles, "**", "")), Traducao: strings.TrimSpace(strings.ReplaceAll(e.Traducao, "**", ""))}
-		if f.Ingles == "" || f.Traducao == "" || vistas[f.Ingles] || len(frases) == exemplosPorPagina {
+		if f.Ingles == "" || f.Traducao == "" || vistas[f.Ingles] || len(frases) == g.exemplos() {
 			continue
 		}
 		vistas[f.Ingles] = true
