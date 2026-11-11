@@ -375,18 +375,47 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	return &p, nil
 }
 
-// buscasAoMesmoTempo: um baralho de 200 cartões com duas fotos cada, uma por vez, levaria uns 10
-// minutos; poucas ao mesmo tempo não abusam da Wikipédia.
-const buscasAoMesmoTempo = 6
+// buscasAoMesmoTempo: a busca por termo consulta duas ou três fontes de uma vez; mais que poucas
+// ao mesmo tempo, a Wikimedia passa a recusar (429), como no baralho dos países (F39).
+const buscasAoMesmoTempo = 2
 
-// buscarFotosDaProposta: as fotos vêm da busca pelo que a IA indicou, ordenada pelo cartão inteiro
-// (frente, verso e tags); sem foto, o cartão segue sem imagem.
+// buscarFotosDaProposta: as fotos vêm do que a IA indicou. Os arquivos exatos do Commons
+// ("Arquivo:Flag of Japan.svg") vêm todos juntos, em lotes; o resto (e o arquivo que não existe)
+// vem da busca pelo termo, ordenada pelo cartão inteiro (frente, verso e tags). Sem foto, o
+// cartão segue sem imagem.
 func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoProposto) {
+	type pedidoDeFoto struct {
+		termo, contexto string
+		destino         *string
+	}
+	var pedidos []pedidoDeFoto
+	var nomes []string
+	vistos := map[string]bool{}
+	for i := range cartoes {
+		c := &cartoes[i]
+		contexto := c.Frente + "\n" + c.Verso + "\n" + c.Tags
+		for _, p := range []pedidoDeFoto{{c.Imagem, contexto, &c.ImagemURL}, {c.ImagemFrente, contexto, &c.ImagemFrenteURL}} {
+			if p.termo == "" || *p.destino != "" {
+				continue
+			}
+			pedidos = append(pedidos, p)
+			if nome, ok := arquivoPedido(p.termo); ok && !vistos[nome] {
+				vistos[nome] = true
+				nomes = append(nomes, nome)
+			}
+		}
+	}
+	exatos, _ := a.arquivosDoCommons(ctx, nomes)
+
 	vagas := make(chan struct{}, buscasAoMesmoTempo)
 	var wg sync.WaitGroup
-	buscar := func(termo, contexto string, destino *string) {
-		if termo == "" || *destino != "" {
-			return
+	for _, p := range pedidos {
+		if nome, ok := arquivoPedido(p.termo); ok {
+			if im, achou := exatos[nome]; achou {
+				*p.destino = im.URL
+				continue
+			}
+			p.termo = termoDoArquivo(nome) // o arquivo não existe: busca pelo nome, sem conferir de novo
 		}
 		wg.Add(1)
 		go func() {
@@ -396,16 +425,10 @@ func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoPropost
 			if ctx.Err() != nil {
 				return
 			}
-			if achadas, err := a.buscarImagens(ctx, termo, contexto, 1, false); err == nil && len(achadas) > 0 {
-				*destino = achadas[0].URL
+			if achadas, err := a.buscarImagens(ctx, p.termo, p.contexto, 1, false); err == nil && len(achadas) > 0 {
+				*p.destino = achadas[0].URL
 			}
 		}()
-	}
-	for i := range cartoes {
-		c := &cartoes[i]
-		contexto := c.Frente + "\n" + c.Verso + "\n" + c.Tags
-		buscar(c.Imagem, contexto, &c.ImagemURL)
-		buscar(c.ImagemFrente, contexto, &c.ImagemFrenteURL)
 	}
 	wg.Wait()
 }

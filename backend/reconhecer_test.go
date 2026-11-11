@@ -28,6 +28,10 @@ func TestBaralhoDeReconhecerPelaImagem(t *testing.T) {
 	if !strings.HasSuffix(japao.ImagemFrenteURL, "/flag-japan.png") || !strings.HasSuffix(japao.ImagemURL, "/mapa-japan.png") {
 		t.Fatalf("arquivos exatos do Commons: %+v", japao)
 	}
+	// Os arquivos exatos vêm numa consulta só (a primeira esbarrou no 429 e foi repetida).
+	if n := e.consultasDeArquivos.Load(); n != 2 {
+		t.Errorf("consultas de arquivos ao Commons: %d, esperava 2 (um lote, repetido depois do 429)", n)
+	}
 	// "Bandeira do Brasil.svg" não existe: a busca pelo nome acha a bandeira.
 	if !(strings.HasSuffix(brasil.ImagemFrenteURL, "/artigo.png") || strings.HasSuffix(brasil.ImagemFrenteURL, "/atual.png")) || brasil.ImagemURL != "" {
 		t.Fatalf("busca pelo nome do arquivo que não existe: %+v", brasil)

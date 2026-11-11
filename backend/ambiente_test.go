@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -26,6 +27,8 @@ type ambiente struct {
 	dados string
 	agora time.Time
 	fuso  *time.Location
+	// Consultas de arquivos exatos ao Commons falso (F39); a primeira volta 429.
+	consultasDeArquivos atomic.Int32
 }
 
 // Um PNG de 1×1 pixel.
@@ -83,14 +86,23 @@ func novoAmbiente(t *testing.T) *ambiente {
 		}
 		// Commons falso: a bandeira atual e a do Império; com o ano, só a do Império.
 		if r.URL.Path == "/commons/api.php" {
-			// Um arquivo pelo nome exato (F39): só a bandeira e o mapa do Japão existem.
-			if titulo := r.URL.Query().Get("titles"); titulo != "" {
-				arquivos := map[string]string{"File:Flag of Japan.svg": "/flag-japan.png", "File:Japan (orthographic projection).svg": "/mapa-japan.png"}
-				if caminho, ok := arquivos[titulo]; ok {
-					fmt.Fprintf(w, `{"query":{"pages":[{"title":%q,"imageinfo":[{"thumburl":"%s%s","mime":"image/svg+xml","extmetadata":{}}]}]}}`, titulo, e.wiki.URL, caminho)
-				} else {
-					fmt.Fprintf(w, `{"query":{"pages":[{"title":%q,"missing":true}]}}`, titulo)
+			// Arquivos pelo nome exato, em lote (F39): só a bandeira e o mapa do Japão existem, e a
+			// primeira consulta esbarra no limite da Wikimedia.
+			if titulos := r.URL.Query().Get("titles"); titulos != "" {
+				if e.consultasDeArquivos.Add(1) == 1 {
+					w.WriteHeader(http.StatusTooManyRequests)
+					return
 				}
+				arquivos := map[string]string{"File:Flag of Japan.svg": "/flag-japan.png", "File:Japan (orthographic projection).svg": "/mapa-japan.png"}
+				var paginas []string
+				for _, t := range strings.Split(titulos, "|") {
+					if caminho, ok := arquivos[t]; ok {
+						paginas = append(paginas, fmt.Sprintf(`{"title":%q,"imageinfo":[{"thumburl":"%s%s","mime":"image/svg+xml","extmetadata":{}}]}`, t, e.wiki.URL, caminho))
+					} else {
+						paginas = append(paginas, fmt.Sprintf(`{"title":%q,"missing":true}`, t))
+					}
+				}
+				fmt.Fprintf(w, `{"query":{"pages":[%s]}}`, strings.Join(paginas, ","))
 				return
 			}
 			busca := r.URL.Query().Get("gsrsearch")
@@ -125,6 +137,7 @@ func novoAmbiente(t *testing.T) *ambiente {
 	t.Cleanup(e.wiki.Close)
 	wikiURL, _ := url.Parse(e.wiki.URL)
 
+	esperaDaWikimedia = time.Millisecond
 	dados := t.TempDir()
 	e.dados = dados
 	cfg := config{dados: dados, regras: absoluto("../regras"), claude: absoluto("testdata/claude-falso"),

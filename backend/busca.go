@@ -11,8 +11,10 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -50,7 +52,7 @@ func (a *app) buscarImagens(ctx context.Context, termo, contexto string, limite 
 			}
 			exato = append(exato, *im)
 		}
-		termo = strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(nome, filepath.Ext(nome)), "_"))
+		termo = termoDoArquivo(nome)
 	}
 	achadas, err := a.buscarNasFontes(ctx, termo, contexto, limite, comOpenverse)
 	if len(exato) == 0 {
@@ -73,6 +75,11 @@ func arquivoPedido(termo string) (string, bool) {
 		return depois, ok && depois != ""
 	}
 	return "", false
+}
+
+// termoDoArquivo: o nome do arquivo sem a extensão vira o termo da busca ("Flag of Japan").
+func termoDoArquivo(nome string) string {
+	return strings.TrimSpace(strings.TrimSuffix(nome, filepath.Ext(nome)))
 }
 
 func (a *app) buscarNasFontes(ctx context.Context, termo, contexto string, limite int, comOpenverse bool) ([]imagemAchada, error) {
@@ -213,21 +220,40 @@ func semAcento(s string) string { return acentos.Replace(s) }
 
 // ---------- Fontes ----------
 
+// esperaDaWikimedia: com muitas consultas seguidas (as fotos de um baralho grande), a Wikimedia
+// responde 429 e pede para esperar; a consulta tenta de novo, até 3 vezes, esperando mais a cada uma.
+var esperaDaWikimedia = time.Second
+
 func (a *app) consultar(ctx context.Context, endereco, quem string, destino any) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", endereco, nil)
-	if err != nil {
-		return err
+	for tentativa := 0; ; tentativa++ {
+		req, err := http.NewRequestWithContext(ctx, "GET", endereco, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", agenteWiki)
+		res, err := clienteWeb.Do(req)
+		if err != nil {
+			return fmt.Errorf("%s não respondeu: %w", quem, err)
+		}
+		if (res.StatusCode == http.StatusTooManyRequests || res.StatusCode == http.StatusServiceUnavailable) && tentativa < 3 {
+			res.Body.Close()
+			espera := esperaDaWikimedia << tentativa
+			if s, err := strconv.Atoi(res.Header.Get("Retry-After")); err == nil && s > 0 && s <= 30 {
+				espera = time.Duration(s) * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(espera):
+			}
+			continue
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			return fmt.Errorf("%s respondeu %d", quem, res.StatusCode)
+		}
+		return json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(destino)
 	}
-	req.Header.Set("User-Agent", agenteWiki)
-	res, err := clienteWeb.Do(req)
-	if err != nil {
-		return fmt.Errorf("%s não respondeu: %w", quem, err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s respondeu %d", quem, res.StatusCode)
-	}
-	return json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(destino)
 }
 
 // buscarNaWikipedia: em português e, sem nenhum artigo com foto, em inglês.
@@ -327,44 +353,87 @@ func (a *app) buscarNoCommons(ctx context.Context, termo string) ([]imagemAchada
 
 // arquivoDoCommons traz um arquivo pelo nome exato; nil quando ele não existe.
 func (a *app) arquivoDoCommons(ctx context.Context, nome string) (*imagemAchada, error) {
+	achados, err := a.arquivosDoCommons(ctx, []string{nome})
+	if im, ok := achados[nome]; ok {
+		return &im, nil
+	}
+	return nil, err
+}
+
+// arquivosPorConsulta: a API do Commons aceita até 50 títulos numa consulta. As bandeiras e os
+// mapas de 193 países são 8 consultas, e não 386.
+const arquivosPorConsulta = 50
+
+// arquivosDoCommons traz vários arquivos pelo nome exato, em lotes; o mapa só tem os que existem.
+func (a *app) arquivosDoCommons(ctx context.Context, nomes []string) (map[string]imagemAchada, error) {
+	achados := map[string]imagemAchada{}
 	if a.cfg.commons == "" {
-		return nil, nil
+		return achados, nil
 	}
-	q := url.Values{
-		"action": {"query"}, "format": {"json"}, "formatversion": {"2"}, "redirects": {"1"},
-		"titles": {"File:" + nome}, "prop": {"imageinfo"}, "iiprop": {"url|mime|extmetadata"}, "iiurlwidth": {"800"},
-		"iiextmetadatafilter": {"LicenseShortName|Artist"},
-	}
-	var corpo struct {
-		Query struct {
-			Pages []struct {
-				Title     string `json:"title"`
-				Missing   bool   `json:"missing"`
-				ImageInfo []struct {
-					ThumbURL    string `json:"thumburl"`
-					Mime        string `json:"mime"`
-					ExtMetadata map[string]struct {
-						Value string `json:"value"`
-					} `json:"extmetadata"`
-				} `json:"imageinfo"`
-			} `json:"pages"`
-		} `json:"query"`
-	}
-	if err := a.consultar(ctx, a.cfg.commons+"?"+q.Encode(), "o Wikimedia Commons", &corpo); err != nil {
-		return nil, err
-	}
-	for _, p := range corpo.Query.Pages {
-		if p.Missing || len(p.ImageInfo) == 0 || p.ImageInfo[0].ThumbURL == "" || !strings.HasPrefix(p.ImageInfo[0].Mime, "image/") {
+	var ultimoErro error
+	for ini := 0; ini < len(nomes); ini += arquivosPorConsulta {
+		lote := nomes[ini:min(ini+arquivosPorConsulta, len(nomes))]
+		titulos := make([]string, len(lote))
+		for i, n := range lote {
+			titulos[i] = "File:" + n
+		}
+		q := url.Values{
+			"action": {"query"}, "format": {"json"}, "formatversion": {"2"}, "redirects": {"1"},
+			"titles": {strings.Join(titulos, "|")}, "prop": {"imageinfo"}, "iiprop": {"url|mime|extmetadata"}, "iiurlwidth": {"800"},
+			"iiextmetadatafilter": {"LicenseShortName|Artist"},
+		}
+		var corpo struct {
+			Query struct {
+				// O Commons devolve o título como ele é (normalizado, e o destino de um redirecionamento).
+				Normalized []struct{ From, To string } `json:"normalized"`
+				Redirects  []struct{ From, To string } `json:"redirects"`
+				Pages      []struct {
+					Title     string `json:"title"`
+					Missing   bool   `json:"missing"`
+					ImageInfo []struct {
+						ThumbURL    string `json:"thumburl"`
+						Mime        string `json:"mime"`
+						ExtMetadata map[string]struct {
+							Value string `json:"value"`
+						} `json:"extmetadata"`
+					} `json:"imageinfo"`
+				} `json:"pages"`
+			} `json:"query"`
+		}
+		if err := a.consultar(ctx, a.cfg.commons+"?"+q.Encode(), "o Wikimedia Commons", &corpo); err != nil {
+			ultimoErro = err
 			continue
 		}
-		ii := p.ImageInfo[0]
-		titulo := strings.TrimPrefix(p.Title, "File:")
-		titulo = strings.TrimSuffix(titulo, filepath.Ext(titulo))
-		autor := strings.TrimSpace(etiquetas.ReplaceAllString(ii.ExtMetadata["Artist"].Value, ""))
-		return &imagemAchada{Titulo: titulo, URL: ii.ThumbURL, Fonte: "Wikimedia Commons",
-			Licenca: ii.ExtMetadata["LicenseShortName"].Value, Autor: cortar(autor, 80)}, nil
+		paginas := map[string]imagemAchada{}
+		for _, p := range corpo.Query.Pages {
+			if p.Missing || len(p.ImageInfo) == 0 || p.ImageInfo[0].ThumbURL == "" || !strings.HasPrefix(p.ImageInfo[0].Mime, "image/") {
+				continue
+			}
+			ii := p.ImageInfo[0]
+			titulo := strings.TrimPrefix(p.Title, "File:")
+			titulo = strings.TrimSuffix(titulo, filepath.Ext(titulo))
+			autor := strings.TrimSpace(etiquetas.ReplaceAllString(ii.ExtMetadata["Artist"].Value, ""))
+			paginas[p.Title] = imagemAchada{Titulo: titulo, URL: ii.ThumbURL, Fonte: "Wikimedia Commons",
+				Licenca: ii.ExtMetadata["LicenseShortName"].Value, Autor: cortar(autor, 80)}
+		}
+		for _, t := range titulos {
+			final := t
+			for _, n := range corpo.Query.Normalized {
+				if n.From == final {
+					final = n.To
+				}
+			}
+			for _, r := range corpo.Query.Redirects {
+				if r.From == final {
+					final = r.To
+				}
+			}
+			if im, ok := paginas[final]; ok {
+				achados[strings.TrimPrefix(t, "File:")] = im
+			}
+		}
 	}
-	return nil, nil
+	return achados, ultimoErro
 }
 
 func (a *app) buscarNoOpenverse(ctx context.Context, termo string) ([]imagemAchada, error) {
