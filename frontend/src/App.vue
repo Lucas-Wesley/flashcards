@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
       <Baralho v-else-if="rota.nome === 'baralho'" :key="rota.param" :id="rota.param" />
       <Importar v-else-if="rota.nome === 'importar'" :key="rota.param" :id="rota.param" />
       <Editor v-else-if="rota.nome === 'adicionar'" :key="'adicionar' + rota.param" :baralho="rota.param" />
-      <Editor v-else-if="rota.nome === 'nota'" :key="rota.param" :id="rota.param" />
+      <Editor v-else-if="rota.nome === 'nota'" :key="rota.param" :id="rota.param.split('/')[0]" :do-estudo="rota.param.endsWith('/estudo')" />
       <Cartoes v-else-if="rota.nome === 'cartoes'" :key="rota.param" :baralho="rota.param" />
       <Gerar v-else-if="rota.nome === 'gerar'" :key="'gerar' + rota.param" :baralho="rota.param" />
       <Link v-else-if="rota.nome === 'link'" :key="'link' + rota.param" :link="rota.param" />

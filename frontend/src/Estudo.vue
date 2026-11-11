@@ -17,6 +17,7 @@ import { hora, intervalo } from './tempo.js'
 // "Mostrar na TV" (F37): o celular continua sendo o estudo e manda cada cena à página da TV
 // (http://192.168.1.20:8453), que só mostra. A escolha fica guardada para a próxima vez.
 // Sem aviso do endereço na tela: atrapalhava o estudo.
+// O menu ⋮ (F41) edita ou exclui a nota do cartão na hora, sem sair do estudo para procurá-la.
 const props = defineProps({ escopo: { type: String, required: true } })
 const tema = computed(() => (props.escopo.startsWith('tema/') ? props.escopo.slice('tema/'.length) : ''))
 const todos = computed(() => props.escopo === 'tudo')
@@ -33,6 +34,7 @@ let mostradoEm = Date.now()
 let espera
 
 const naTV = ref(lembrar('tv') === '1')
+const menuAberto = ref(false)
 
 const NOTAS = [
   { valor: 1, nome: 'Errei', classe: 'errei', dica: 'Errei: rever daqui a pouco (1)' },
@@ -156,13 +158,40 @@ async function desfazer() {
   }
 }
 
+// editar: o editor da nota; ao salvar, ele volta para cá e o estudo recarrega o cartão.
+function editar() {
+  menuAberto.value = false
+  location.hash = `#/nota/${cartao.value.nota_id}/estudo`
+}
+
+async function excluir() {
+  menuAberto.value = false
+  const c = cartao.value
+  const doisSentidos = c.tipo === 'invertido' ? ' (os dois sentidos)' : ''
+  if (!confirm(`Excluir este cartão${doisSentidos} e o histórico dele? Não dá para desfazer.`)) return
+  try {
+    await api(`/api/notas/${c.nota_id}`, { metodo: 'DELETE' })
+    recado('Cartão excluído.')
+    await carregar()
+  } catch (e) {
+    recado(e.message, true)
+  }
+}
+
+function fecharMenu(ev) {
+  if (menuAberto.value && !ev.target.closest('.menu-opcoes')) menuAberto.value = false
+}
+
 function voltar() {
   location.hash = id.value ? `#/baralho/${id.value}` : '#/estudar'
 }
 
 function aoTeclar(ev) {
   if (ev.target.closest('input, textarea, select') || ev.altKey || ev.metaKey) return
-  if (ev.key === 'Escape') return voltar()
+  if (ev.key === 'Escape') {
+    if (menuAberto.value) return (menuAberto.value = false)
+    return voltar()
+  }
   if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
     ev.preventDefault()
     return desfazer()
@@ -178,11 +207,13 @@ function aoTeclar(ev) {
 
 onMounted(() => {
   window.addEventListener('keydown', aoTeclar)
+  window.addEventListener('pointerdown', fecharMenu)
   carregar()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', aoTeclar)
+  window.removeEventListener('pointerdown', fecharMenu)
   clearTimeout(espera)
   player?.pause()
   // Fora do estudo, a TV volta para a espera.
@@ -217,6 +248,23 @@ onBeforeUnmount(() => {
       <button class="botao icone" aria-label="Desfazer a última resposta" title="Desfazer (Z)" :disabled="!estudo?.feitos_hoje" @click="desfazer">
         <Icone nome="desfazer" />
       </button>
+      <div class="menu-opcoes">
+        <button
+          class="botao icone"
+          aria-label="Opções do cartão"
+          title="Opções do cartão"
+          aria-haspopup="menu"
+          :aria-expanded="menuAberto"
+          :disabled="!cartao"
+          @click="menuAberto = !menuAberto"
+        >
+          <Icone nome="opcoes" />
+        </button>
+        <div v-if="menuAberto" class="menu-lista vidro" role="menu">
+          <button role="menuitem" @click="editar">Editar</button>
+          <button role="menuitem" class="perigo" @click="excluir">Excluir</button>
+        </div>
+      </div>
     </header>
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
@@ -312,6 +360,45 @@ onBeforeUnmount(() => {
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+.menu-opcoes {
+  position: relative;
+}
+
+.menu-lista {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: var(--raio);
+  background: var(--fundo);
+  box-shadow: var(--sombra);
+  border: 1px solid var(--linha);
+}
+
+.menu-lista button {
+  padding: 12px 14px;
+  border: 0;
+  border-radius: calc(var(--raio) - 4px);
+  background: none;
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-lista button:hover,
+.menu-lista button:focus-visible {
+  background: var(--superficie);
+}
+
+.menu-lista .perigo {
+  color: var(--perigo);
 }
 
 .ligado {

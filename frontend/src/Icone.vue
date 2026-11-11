@@ -8,6 +8,7 @@ defineProps({ nome: { type: String, required: true } })
     <path v-else-if="nome === 'avancar'" d="M9 5l7 7-7 7" />
     <path v-else-if="nome === 'fechar'" d="M6 6l12 12M18 6L6 18" />
     <path v-else-if="nome === 'mais'" d="M12 5v14M5 12h14" />
+    <path v-else-if="nome === 'opcoes'" d="M12 5.5h.01M12 12h.01M12 18.5h.01" stroke-width="2.6" />
     <path v-else-if="nome === 'desfazer'" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" />
     <template v-else-if="nome === 'som'">
       <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />

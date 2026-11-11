@@ -305,3 +305,35 @@ test('um baralho de reconhecer: a bandeira na frente, o nome no verso', async ({
   await page.keyboard.press('Space')
   await expect(page.locator('.verso')).toHaveText(/Japão|Brasil/)
 })
+
+test('no estudo, o menu ⋮ edita e exclui o cartão', async ({ page }) => {
+  await page.goto('/#/novo-baralho')
+  await page.getByLabel('Nome do novo baralho').fill('Rios')
+  await page.getByRole('button', { name: 'Criar baralho' }).click()
+  await page.getByRole('link', { name: 'Adicionar', exact: true }).click()
+  for (const [frente, verso] of [['Rio mais longo do Brasil', 'Amazonas'], ['Rio do Velho Chico', 'São Francisco']]) {
+    await page.getByLabel('Frente').fill(frente)
+    await page.getByLabel('Verso').fill(verso)
+    await page.getByRole('main').getByRole('button', { name: 'Adicionar' }).click()
+    await expect(page.getByText('Cartão adicionado.')).toBeVisible()
+  }
+
+  await page.goto('/#/baralhos')
+  await page.getByRole('link', { name: /Rios/ }).click()
+  await page.getByRole('link', { name: 'Estudar', exact: true }).click()
+  await expect(page.locator('.frente')).toHaveText('Rio mais longo do Brasil')
+
+  // Editar: abre o editor da nota e, ao salvar, volta para o estudo com o texto novo.
+  await page.getByRole('button', { name: 'Opções do cartão' }).click()
+  await page.getByRole('menuitem', { name: 'Editar' }).click()
+  await page.getByLabel('Frente').fill('Rio mais longo da América do Sul')
+  await page.getByRole('button', { name: 'Salvar' }).click()
+  await expect(page.locator('.frente')).toHaveText('Rio mais longo da América do Sul')
+
+  // Excluir: some do estudo e vem o próximo.
+  page.once('dialog', (d) => d.accept())
+  await page.getByRole('button', { name: 'Opções do cartão' }).click()
+  await page.getByRole('menuitem', { name: 'Excluir' }).click()
+  await expect(page.getByText('Cartão excluído.')).toBeVisible()
+  await expect(page.locator('.frente')).toHaveText('Rio do Velho Chico')
+})

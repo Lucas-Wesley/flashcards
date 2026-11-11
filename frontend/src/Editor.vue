@@ -10,9 +10,11 @@ import { ondeAbre } from './fonte.js'
 
 // Adicionar (sem id) ou editar (com id) uma nota. Ao adicionar, o baralho, o tipo e as tags ficam
 // para a próxima, e o foco volta para a frente: dá para cadastrar uma lista em sequência.
+// Aberto do estudo (doEstudo), salvar volta para o estudo.
 const props = defineProps({
   id: { type: String, default: '' },
   baralho: { type: String, default: '' },
+  doEstudo: { type: Boolean, default: false },
 })
 const recado = inject('recado')
 
@@ -67,6 +69,7 @@ async function salvar() {
     if (editando.value) {
       nota.value = await api(`/api/notas/${props.id}`, { metodo: 'PUT', corpo: dados.value })
       recado('Cartão salvo.')
+      if (props.doEstudo) history.back()
     } else {
       const n = await api('/api/notas', { metodo: 'POST', corpo: dados.value })
       lembrar('baralho', dados.value.baralho_id)
