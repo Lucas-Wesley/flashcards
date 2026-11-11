@@ -71,7 +71,7 @@ O app busca as imagens na Wikipédia e no Wikimedia Commons; você diz o que cad
 Algumas que funcionam bem:
 
 - **Bandeira de um país**: `Arquivo:Flag of <nome do país em inglês>.svg` (ex.: `Arquivo:Flag of Japan.svg`). De um estado brasileiro, o artigo da Wikipédia (ex.: "Bandeira de Pernambuco").
-- **Onde fica um país**: um globo centrado no país, pintado de verde, com o continente em volta, nem longe nem perto demais. Sempre com as alternativas, porque os países muito pequenos não têm o primeiro: `Arquivo:Portugal (orthographic projection).svg | Arquivo:Portugal on the globe (Europe centered).svg | Arquivo:Location Portugal Europe.png` (no segundo e no terceiro, o continente do país em inglês: Europe, Africa, Asia, Oceania, North America, South America).
+- **Onde fica um país**: um globo centrado no país, pintado de verde, com o continente em volta, nem longe nem perto demais. Sempre com as alternativas, porque muitos países pequenos (ilhas do Caribe, microestados da Europa) não têm o primeiro: `Arquivo:Portugal (orthographic projection).svg | Arquivo:Portugal in its region.svg | Arquivo:Portugal on the globe (Europe centered).svg` (no terceiro, o continente do país em inglês: Europe, Africa, Asia, Oceania, North America, South America).
 
 Regras:
 
