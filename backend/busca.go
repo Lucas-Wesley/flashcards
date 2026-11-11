@@ -41,20 +41,22 @@ type imagemAchada struct {
 type fonteDeImagem func(ctx context.Context, termo string) ([]imagemAchada, error)
 
 // buscarImagens junta as fontes, ordena pelo termo e pelo contexto e devolve até limite imagens.
-// Um termo "Arquivo:Nome.svg" (F39) é um arquivo exato do Commons: ele vem primeiro, e a busca pelo
-// nome completa a lista (ou a faz sozinha, se o arquivo não existir).
+// Um termo "Arquivo:Nome.svg" (F39) é um arquivo exato do Commons; o termo pode trazer alternativas,
+// em ordem de preferência, separadas por "|". O primeiro arquivo que existir vem primeiro, e a busca
+// pelo primeiro termo completa a lista (ou a faz sozinha, se nenhum arquivo existir).
 func (a *app) buscarImagens(ctx context.Context, termo, contexto string, limite int, comOpenverse bool) ([]imagemAchada, error) {
+	alternativas := alternativasDoTermo(termo)
 	var exato []imagemAchada
-	if nome, ok := arquivoPedido(termo); ok {
-		if im, err := a.arquivoDoCommons(ctx, nome); err == nil && im != nil {
+	if nomes := arquivosDoTermo(alternativas); len(nomes) > 0 {
+		achados, _ := a.arquivosDoCommons(ctx, nomes)
+		if im, ok := primeiroAchado(nomes, achados); ok {
 			if limite == 1 {
-				return []imagemAchada{*im}, nil
+				return []imagemAchada{im}, nil
 			}
-			exato = append(exato, *im)
+			exato = append(exato, im)
 		}
-		termo = termoDoArquivo(nome)
 	}
-	achadas, err := a.buscarNasFontes(ctx, termo, contexto, limite, comOpenverse)
+	achadas, err := a.buscarNasFontes(ctx, termoDaBusca(alternativas), contexto, limite, comOpenverse)
 	if len(exato) == 0 {
 		return achadas, err
 	}
@@ -64,6 +66,48 @@ func (a *app) buscarImagens(ctx context.Context, termo, contexto string, limite 
 		}
 	}
 	return exato, nil
+}
+
+// alternativasDoTermo: "Arquivo:A.svg | Arquivo:B.svg" → as duas, na ordem.
+func alternativasDoTermo(termo string) []string {
+	var lista []string
+	for _, t := range strings.Split(termo, "|") {
+		if t = strings.TrimSpace(t); t != "" {
+			lista = append(lista, t)
+		}
+	}
+	return lista
+}
+
+// arquivosDoTermo: os nomes dos arquivos exatos entre as alternativas.
+func arquivosDoTermo(alternativas []string) []string {
+	var nomes []string
+	for _, t := range alternativas {
+		if nome, ok := arquivoPedido(t); ok {
+			nomes = append(nomes, nome)
+		}
+	}
+	return nomes
+}
+
+func primeiroAchado(nomes []string, achados map[string]imagemAchada) (imagemAchada, bool) {
+	for _, n := range nomes {
+		if im, ok := achados[n]; ok {
+			return im, true
+		}
+	}
+	return imagemAchada{}, false
+}
+
+// termoDaBusca: sem arquivo que exista, a busca usa a primeira alternativa (de um arquivo, o nome).
+func termoDaBusca(alternativas []string) string {
+	if len(alternativas) == 0 {
+		return ""
+	}
+	if nome, ok := arquivoPedido(alternativas[0]); ok {
+		return termoDoArquivo(nome)
+	}
+	return alternativas[0]
 }
 
 // arquivoPedido: "Arquivo:Flag of Portugal.svg" (ou File:, Ficheiro:) → "Flag of Portugal.svg".
@@ -349,15 +393,6 @@ func (a *app) buscarNoCommons(ctx context.Context, termo string) ([]imagemAchada
 			Licenca: ii.ExtMetadata["LicenseShortName"].Value, Autor: cortar(autor, 80)})
 	}
 	return achadas, nil
-}
-
-// arquivoDoCommons traz um arquivo pelo nome exato; nil quando ele não existe.
-func (a *app) arquivoDoCommons(ctx context.Context, nome string) (*imagemAchada, error) {
-	achados, err := a.arquivosDoCommons(ctx, []string{nome})
-	if im, ok := achados[nome]; ok {
-		return &im, nil
-	}
-	return nil, err
 }
 
 // arquivosPorConsulta: a API do Commons aceita até 50 títulos numa consulta. As bandeiras e os

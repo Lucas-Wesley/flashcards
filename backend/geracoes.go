@@ -399,9 +399,11 @@ func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoPropost
 				continue
 			}
 			pedidos = append(pedidos, p)
-			if nome, ok := arquivoPedido(p.termo); ok && !vistos[nome] {
-				vistos[nome] = true
-				nomes = append(nomes, nome)
+			for _, nome := range arquivosDoTermo(alternativasDoTermo(p.termo)) {
+				if !vistos[nome] {
+					vistos[nome] = true
+					nomes = append(nomes, nome)
+				}
 			}
 		}
 	}
@@ -410,12 +412,15 @@ func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoPropost
 	vagas := make(chan struct{}, buscasAoMesmoTempo)
 	var wg sync.WaitGroup
 	for _, p := range pedidos {
-		if nome, ok := arquivoPedido(p.termo); ok {
-			if im, achou := exatos[nome]; achou {
-				*p.destino = im.URL
-				continue
-			}
-			p.termo = termoDoArquivo(nome) // o arquivo não existe: busca pelo nome, sem conferir de novo
+		alternativas := alternativasDoTermo(p.termo)
+		if im, achou := primeiroAchado(arquivosDoTermo(alternativas), exatos); achou {
+			*p.destino = im.URL
+			continue
+		}
+		// Nenhum arquivo existe: busca pelo primeiro termo, sem conferir os arquivos de novo.
+		termo := termoDaBusca(alternativas)
+		if termo == "" {
+			continue
 		}
 		wg.Add(1)
 		go func() {
@@ -425,7 +430,7 @@ func (a *app) buscarFotosDaProposta(ctx context.Context, cartoes []cartaoPropost
 			if ctx.Err() != nil {
 				return
 			}
-			if achadas, err := a.buscarImagens(ctx, p.termo, p.contexto, 1, false); err == nil && len(achadas) > 0 {
+			if achadas, err := a.buscarNasFontes(ctx, termo, p.contexto, 1, false); err == nil && len(achadas) > 0 {
 				*p.destino = achadas[0].URL
 			}
 		}()

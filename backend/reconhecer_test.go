@@ -33,8 +33,12 @@ func TestBaralhoDeReconhecerPelaImagem(t *testing.T) {
 		t.Errorf("consultas de arquivos ao Commons: %d, esperava 2 (um lote, repetido depois do 429)", n)
 	}
 	// "Bandeira do Brasil.svg" não existe: a busca pelo nome acha a bandeira.
-	if !(strings.HasSuffix(brasil.ImagemFrenteURL, "/artigo.png") || strings.HasSuffix(brasil.ImagemFrenteURL, "/atual.png")) || brasil.ImagemURL != "" {
+	if !(strings.HasSuffix(brasil.ImagemFrenteURL, "/artigo.png") || strings.HasSuffix(brasil.ImagemFrenteURL, "/atual.png")) {
 		t.Fatalf("busca pelo nome do arquivo que não existe: %+v", brasil)
+	}
+	// Alternativas separadas por "|": vale o primeiro arquivo que existe.
+	if !strings.HasSuffix(brasil.ImagemURL, "/mapa-japan.png") {
+		t.Fatalf("alternativas: %+v", brasil)
 	}
 
 	var res struct {

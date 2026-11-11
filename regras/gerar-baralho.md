@@ -66,11 +66,12 @@ O app busca as imagens na Wikipédia e no Wikimedia Commons; você diz o que cad
 
 - **um arquivo exato do Commons**, quando você sabe o nome: `Arquivo:Flag of Portugal.svg`. É o mais seguro: a busca por termo pode trazer uma bandeira antiga ou de outro lugar. Se o arquivo não existir, o app busca pelo nome. Na dúvida sobre o nome, confira no commons.wikimedia.org.
 - **um termo de busca curto** (2 a 6 palavras), de preferência o título exato do artigo da Wikipédia em português (ex.: "Luiz Inácio Lula da Silva").
+- **alternativas**, em ordem de preferência, separadas por ` | ` (até 3): o app usa o primeiro arquivo que existir e, se nenhum existir, busca pelo primeiro. Use quando a série de arquivos que você quer pode não ter o item (um país pequeno, um caso raro).
 
 Algumas que funcionam bem:
 
 - **Bandeira de um país**: `Arquivo:Flag of <nome do país em inglês>.svg` (ex.: `Arquivo:Flag of Japan.svg`). De um estado brasileiro, o artigo da Wikipédia (ex.: "Bandeira de Pernambuco").
-- **Onde fica um país**: `Arquivo:<nome do país em inglês> (orthographic projection).svg` (ex.: `Arquivo:Portugal (orthographic projection).svg`): um globo centrado no país, pintado de verde, com o continente em volta, nem longe nem perto demais.
+- **Onde fica um país**: um globo centrado no país, pintado de verde, com o continente em volta, nem longe nem perto demais. Sempre com as alternativas, porque os países muito pequenos não têm o primeiro: `Arquivo:Portugal (orthographic projection).svg | Arquivo:Portugal on the globe (Europe centered).svg | Arquivo:Location Portugal Europe.png` (no segundo e no terceiro, o continente do país em inglês: Europe, Africa, Asia, Oceania, North America, South America).
 
 Regras:
 
