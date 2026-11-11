@@ -22,6 +22,10 @@ type config struct {
 	commons       string
 	openverse     string
 	hostsDeImagem []string
+	// Avisos no celular (F35): o ntfy do homelab, com o tópico (vazio, o app não avisa), e o endereço
+	// do app que a notificação abre.
+	ntfy string
+	link string
 }
 
 func configDoAmbiente(dados string) config {
@@ -34,6 +38,8 @@ func configDoAmbiente(dados string) config {
 		commons:       env("COMMONS_API", "https://commons.wikimedia.org/w/api.php"),
 		openverse:     env("OPENVERSE_API", "https://api.openverse.org/v1/images/"),
 		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
+		ntfy:          os.Getenv("NTFY_URL"),
+		link:          strings.TrimSuffix(env("FLASHCARDS_LINK", "https://192.168.1.20:8445"), "/"),
 	}
 }
 
@@ -47,10 +53,11 @@ func absoluto(caminho string) string {
 
 // app junta o que os handlers e a fila usam.
 type app struct {
-	db   *sql.DB
-	rel  relogio
-	cfg  config
-	fila *filaDaIA
+	db     *sql.DB
+	rel    relogio
+	cfg    config
+	fila   *filaDaIA
+	avisos *avisador // nil sem NTFY_URL
 }
 
 func novoApp(db *sql.DB, rel relogio, cfg config) (*app, error) {
@@ -59,7 +66,7 @@ func novoApp(db *sql.DB, rel relogio, cfg config) (*app, error) {
 			return nil, err
 		}
 	}
-	a := &app{db: db, rel: rel, cfg: cfg}
+	a := &app{db: db, rel: rel, cfg: cfg, avisos: novoAvisador(cfg.ntfy)}
 	a.fila = novaFila(a)
 	return a, nil
 }

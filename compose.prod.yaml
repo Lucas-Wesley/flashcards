@@ -3,6 +3,9 @@ services:
     ports: !reset []
     volumes:
       - /srv/data/flashcards:/data
+    environment:
+      # Avisos no celular (F35): o ntfy do homelab (homelab/ntfy), tópico "flashcards".
+      NTFY_URL: http://ntfy/flashcards
     networks:
       - proxy
 

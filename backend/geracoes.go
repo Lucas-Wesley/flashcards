@@ -208,12 +208,28 @@ func (f *filaDaIA) executar(ctx context.Context, g *geracao) {
 		f.a.terminar(g.ID, cancelada, "", nil)
 	case esgotou:
 		f.a.terminar(g.ID, falhou, "A IA passou de 15 minutos sem terminar.", nil)
+		f.a.avisarGeracao(g, "A IA passou de 15 minutos sem terminar.")
 	case err != nil:
 		log.Printf("geração %d: %v", g.ID, err)
 		f.a.terminar(g.ID, falhou, err.Error(), nil)
+		f.a.avisarGeracao(g, err.Error())
 	default:
 		f.a.terminar(g.ID, emRevisao, "", p)
+		f.a.avisarGeracao(g, "")
 	}
+}
+
+// avisarGeracao (F35): a proposta da IA espera revisão, ou a geração falhou (com o erro).
+func (a *app) avisarGeracao(g *geracao, erro string) {
+	av := aviso{
+		Titulo: primeiro(g.NomeSugerido, g.Contexto, g.Pedido, g.Link, "Cartões"),
+		Texto:  "Cartões prontos para revisar.",
+		Link:   fmt.Sprintf("%s/#/geracao/%d", a.cfg.link, g.ID),
+	}
+	if erro != "" {
+		av.Texto, av.Urgente = "A geração falhou: "+erro, true
+	}
+	a.avisos.avisar(av)
 }
 
 func (a *app) terminar(id int64, estado, erro string, p *proposta) {
@@ -698,6 +714,16 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"baralho_id": baralhoID, "criadas": criadas, "atualizadas": atualizadas, "sem_imagem": semImagem, "sem_audio": semAudio})
+}
+
+// primeiro devolve o primeiro valor não vazio.
+func primeiro(valores ...string) string {
+	for _, v := range valores {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func cortar(s string, n int) string {
