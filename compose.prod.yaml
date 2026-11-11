@@ -3,9 +3,12 @@ services:
     ports: !reset []
     volumes:
       - /srv/data/flashcards:/data
+      # A conta do Claude escolhida no Hub (H11 do Hub), lida a cada chamada; só leitura.
+      - /srv/data/claude/ativa:/claude:ro
     environment:
       # Avisos no celular (F35): o ntfy do homelab (homelab/ntfy), tópico "flashcards".
       NTFY_URL: http://ntfy/flashcards
+      CLAUDE_TOKEN_ARQUIVO: /claude/token
     networks:
       - proxy
 
