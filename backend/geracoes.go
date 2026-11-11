@@ -284,7 +284,7 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 			g.Pedido, g.Quantidade, nomesDosTipos[g.Tipo], destino),
 		esquema: esquemaProposta,
 	}
-	if g.Origem == origemAcervo {
+	if g.doTexto() {
 		pedido = pedidoDoTexto(g, destino, pasta)
 	}
 	if g.Origem == "link" {
@@ -305,7 +305,7 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	cartoes := p.Cartoes[:0]
 	for _, c := range p.Cartoes {
 		c.Frente, c.Verso, c.Tags, c.Imagem = strings.TrimSpace(c.Frente), strings.TrimSpace(c.Verso), limparTags(c.Tags), strings.TrimSpace(c.Imagem)
-		if g.Origem == origemAcervo {
+		if g.doTexto() {
 			c.Secao, c.Fonte = g.fonteDoCartao(c.Secao)
 		} else {
 			c.Secao = ""

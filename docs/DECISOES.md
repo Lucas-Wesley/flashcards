@@ -75,6 +75,7 @@
 | F33 | **Baralhos só com os baralhos.** A página Baralhos mostra os baralhos e o **Estudar**; nada mais. Os pedidos à IA, os links e o que veio do Acervo ganham o item **Pedidos** no menu (entre Adicionar e Cartões), com um contador das propostas para revisar e dos pedidos que falharam: os que pedem atenção primeiro, depois os últimos decididos. Criar um baralho vazio virou a aba **Baralho novo** em Adicionar (ao lado de Escrever, Do link e Com IA). A revisão de uma proposta volta para Pedidos | Pedido do Lucas em 07/11/2026: a lista de baralhos ficava cheia de coisas que não são baralhos. As propostas chegam sozinhas (extensão, Acervo, fila da IA), então precisam de um lugar com contador, à vista. |
 | F34 | **Excluir e Refazer na revisão.** "Descartar" virou **Excluir**: `DELETE /api/geracoes/{id}` apaga o pedido em qualquer estado (rodando, a IA é parada antes); os cartões de um pedido já aprovado continuam no baralho. A revisão ganhou **Refazer** ao lado de aprovar, que pede outra proposta com o mesmo pedido. O pedido diz se dá para refazer (`pode_refazer`): sempre, menos num link com até 3 frases prontas, que não passa pela IA. O `descartar` continua na API, para o Acervo | Pedido do Lucas em 07/11/2026: um pedido descartado continuava na lista; e pedir outra proposta não devia exigir abrir a edição. |
 | F35 | **Avisos no celular** pelo ntfy do homelab (`NTFY_URL`, tópico `flashcards`; sem a variável, não avisa): a geração da IA que ficou **pronta para revisar** e a que **falhou** (prioridade alta). Tocar abre o pedido (`FLASHCARDS_LINK`/#/geracao/id) | Pedido do Lucas em 10/11/2026: a geração leva minutos e só aparecia abrindo o app. Só avisa o que pede ação. Nos testes, um ntfy falso (`ntfy_test.go`). |
+| F36 | **Cartão de uma marcação da Biblioteca (11/11/2026).** O `POST /api/textos` aceita `origem: "biblioteca"`: o texto é o trecho marcado (de 2 a 20 mil caracteres, sem o mínimo de 200 do Acervo), e o contexto traz o livro, o capítulo, a nota do Lucas e a página em volta. A IA segue `regras/gerar-da-marcacao.md` (em geral um cartão, no máximo três; a nota manda; vocabulário em livro de outro idioma, a ideia em livro de conteúdo), sem internet, e o pedido cai na mesma revisão. O baralho é sempre um que já existe, escolhido na Biblioteca. Cada cartão guarda o link que abre o livro no trecho, e o estudo e o editor dizem "Ver no livro" em vez de "Ver no Acervo" | Pedido do Lucas: marcar no livro, escolher o baralho e a IA ajudar com a frente e o verso. Reaproveita o endpoint do Acervo em vez de criar um novo, como sugerido no `SUGESTOES.md` do homelab (item 6). |
 
 ## 3. Como roda
 
@@ -88,6 +89,6 @@
 (`http://flashcards:8080`). O Acervo também lê e decide as propostas que ele mandou, por `GET /api/geracoes/{id}` e
 `POST /api/geracoes/{id}/{aprovar|descartar|refazer}`.
 
-**Planejada:** Biblioteca (seleção de texto) → Flashcards. Pelo princípio do ecossistema, o endpoint só nasce
-quando o outro lado for mandar de verdade, e é aí que o contrato comum (`CONTRATO.md` do Hub) vira concreto. A ideia
-inicial é `POST /api/v1/cards` recebendo um Fragmento de Conteúdo, que vira uma nota com a fonte guardada.
+**Feita:** Biblioteca → Flashcards (F36), pelo mesmo `POST /api/textos`, com `origem: "biblioteca"`: o Lucas toca
+numa marcação, escolhe o baralho, e a IA propõe o cartão. O formato que o endpoint aceita é o embrião do "Fragmento"
+do contrato comum (`CONTRATO.md` do Hub), que segue sem ser definido.

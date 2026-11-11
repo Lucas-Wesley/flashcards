@@ -18,6 +18,8 @@ Deixe de fora:
 - O que só faz sentido com o texto aberto ("o segundo item da lista acima").
 - Detalhe que não vale a pena lembrar. Na dúvida, menos cartões e melhores. O número pedido é um **teto**, não uma meta: um texto curto pode render três cartões.
 
+**Pontos-chave primeiro.** Um resumo de livro pode abrir com a seção "Pontos-chave": são as ideias que o Lucas marcou ao ler, as que ele acha fundamentais. Cada uma vira cartão (salvo a que não se sustenta sozinha), antes de qualquer outra coisa do texto; o resto entra só se couber no teto e valer a pena.
+
 Se o texto não tem nada que vire cartão, devolva a lista vazia e diga o porquê em `observacoes`.
 
 ## Fiel ao texto

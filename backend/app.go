@@ -39,7 +39,7 @@ func configDoAmbiente(dados string) config {
 		openverse:     env("OPENVERSE_API", "https://api.openverse.org/v1/images/"),
 		hostsDeImagem: strings.Split(env("HOSTS_DE_IMAGEM", "upload.wikimedia.org,thumb.wikimedia.org,api.openverse.org"), ","),
 		ntfy:          os.Getenv("NTFY_URL"),
-		link:          strings.TrimSuffix(env("FLASHCARDS_LINK", "https://192.168.1.20:8445"), "/"),
+		link:          strings.TrimSuffix(env("FLASHCARDS_LINK", "https://flashcards.internal"), "/"),
 	}
 }
 

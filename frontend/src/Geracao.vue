@@ -3,6 +3,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
 import { api } from './api.js'
 import { contextoDoCartao, termoDaBusca } from './busca.js'
+import { doLivro } from './fonte.js'
 
 // Um pedido à IA ou um link: enquanto a IA trabalha, o andamento; depois, a proposta para revisar.
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
@@ -36,7 +37,9 @@ const NOMES = {
 }
 
 const doLink = computed(() => g.value?.origem === 'link')
-const doAcervo = computed(() => g.value?.origem === 'acervo')
+// Do Acervo ou de uma marcação da Biblioteca: o texto veio pronto, e a IA só tira os cartões dele.
+const doAcervo = computed(() => ['acervo', 'biblioteca'].includes(g.value?.origem))
+const daMarcacao = computed(() => g.value?.origem === 'biblioteca')
 const trabalhando = computed(() => ['na_fila', 'rodando'].includes(g.value?.estado))
 const escolhidos = computed(() => cartoes.value.filter((c) => c.incluir))
 // "Atualiza" foi visto no baralho do pedido; em outro, quem decide é a aprovação.
@@ -160,11 +163,11 @@ onBeforeUnmount(() => clearTimeout(relogio))
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="g">
-      <h1>{{ doLink ? 'Cartões do link' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
+      <h1>{{ doLink ? 'Cartões do link' : daMarcacao ? 'Cartão da marcação' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
       <p v-if="doLink" class="pedido link"><a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a></p>
       <p v-else-if="doAcervo" class="pedido">
         {{ g.pedido }}
-        <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir no Acervo</a>
+        <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir {{ daMarcacao ? 'no livro' : 'no Acervo' }}</a>
         <button v-if="!trabalhando && g.estado !== 'em_revisao'" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
       </p>
       <form v-else-if="editando" class="edicao" @submit.prevent="refazer">
@@ -207,7 +210,9 @@ onBeforeUnmount(() => clearTimeout(relogio))
               ? 'Esperando a vez: a IA faz um pedido por vez.'
               : doLink
                 ? 'Ela lê as frases da página e escolhe as 3 mais didáticas; costuma levar menos de um minuto.'
-                : doAcervo
+                : daMarcacao
+                  ? 'Ela lê o trecho marcado e monta a frente e o verso; costuma levar um ou dois minutos.'
+                  : doAcervo
                   ? 'Ela lê o texto e escolhe o que vale virar cartão; costuma levar alguns minutos.'
                   : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.'
           }}
@@ -258,7 +263,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
             <input v-model="c.incluir" type="checkbox" class="marcar" :aria-label="`Incluir o cartão ${i + 1}`" />
             <div class="campos">
               <span v-if="c.atualiza" class="chip atualiza">Atualiza o cartão que já existe</span>
-              <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || 'Texto no Acervo' }}</a>
+              <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : 'Texto no Acervo') }}</a>
               <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
               <textarea v-model="c.verso" class="campo texto-cartao" rows="2" :aria-label="`Verso do cartão ${i + 1}`" />
               <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />

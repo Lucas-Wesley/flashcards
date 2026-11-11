@@ -477,3 +477,50 @@ func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 		t.Errorf("texto grande: %d", s)
 	}
 }
+
+func TestCartaoDeUmaMarcacaoDaBiblioteca(t *testing.T) {
+	e := novoAmbiente(t)
+	var b baralho
+	if s := e.pedir("POST", "/api/baralhos", map[string]any{"nome": "Livros"}, &b); s != http.StatusCreated {
+		t.Fatalf("baralho: %d", s)
+	}
+	link := "https://biblioteca/#/livro/abc?em=%7B%22pagina%22%3A12%7D"
+	corpo := map[string]any{
+		"origem": "biblioteca", "titulo": "Frutas do Brasil › O caju", "texto": "TRECHO MARCADO: o caju é nativo do Nordeste.",
+		"contexto": "Livro: \"Frutas do Brasil\". Nota do Lucas na marcação: \"lembrar\".", "link": link, "baralho_id": b.ID,
+	}
+	var g geracao
+	if s := e.pedir("POST", "/api/textos", corpo, &g); s != http.StatusCreated {
+		t.Fatalf("pedir da marcação: %d", s)
+	}
+	if g.Origem != origemBiblioteca || g.Quantidade != cartoesDaMarcacao || g.Link != link {
+		t.Fatalf("pedido: %+v", g)
+	}
+	g = e.esperarGeracao(g.ID, emRevisao)
+	obs := g.Proposta.Observacoes
+	if !strings.Contains(obs, "Recebeu a marcação pela entrada.") || !strings.Contains(obs, "Seguiu a instrução da marcação.") || !strings.Contains(obs, "WebSearch,WebFetch.") {
+		t.Fatalf("observações: %q", obs)
+	}
+	// Sem capítulos: todo cartão leva o link que abre o livro no trecho.
+	for _, c := range g.Proposta.Cartoes {
+		if c.Fonte != link || c.Secao != "" {
+			t.Errorf("cartão: %+v", c)
+		}
+	}
+
+	// Uma marcação é curta (o mínimo do Acervo não vale), mas não pode estar vazia nem ser um capítulo.
+	for _, c := range []struct {
+		texto, origem string
+		status        int
+	}{
+		{" ", "biblioteca", http.StatusBadRequest},
+		{strings.Repeat("palavra ", 3000), "biblioteca", http.StatusRequestEntityTooLarge},
+		{"curto", "outra", http.StatusBadRequest},
+		{"curto", "", http.StatusBadRequest},
+	} {
+		corpo["texto"], corpo["origem"] = c.texto, c.origem
+		if s := e.pedir("POST", "/api/textos", corpo, nil); s != c.status {
+			t.Errorf("%q de %q: %d, queria %d", c.texto[:min(len(c.texto), 10)], c.origem, s, c.status)
+		}
+	}
+}

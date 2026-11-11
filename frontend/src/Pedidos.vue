@@ -17,7 +17,7 @@ const ESTADOS = {
   rejeitada: 'Descartado',
   cancelada: 'Cancelado',
 }
-const ORIGENS = { ia: 'Com IA', link: 'Do link', acervo: 'Do Acervo' }
+const ORIGENS = { ia: 'Com IA', link: 'Do link', acervo: 'Do Acervo', biblioteca: 'Da Biblioteca' }
 const ABERTOS = ['na_fila', 'rodando', 'em_revisao', 'falhou']
 
 const abertos = computed(() => (geracoes.value || []).filter((g) => ABERTOS.includes(g.estado)))
@@ -48,7 +48,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
     <template v-if="geracoes">
       <p v-if="!geracoes.length" class="vazio">
         Nenhum pedido ainda.<br />
-        Os cartões pedidos <a href="#/gerar">à IA</a>, tirados <a href="#/link">de um link</a> ou mandados pelo Acervo aparecem aqui para revisar.
+        Os cartões pedidos <a href="#/gerar">à IA</a>, tirados <a href="#/link">de um link</a> ou mandados pelo Acervo e pela Biblioteca aparecem aqui para revisar.
       </p>
 
       <template v-if="abertos.length">

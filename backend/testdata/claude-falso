@@ -25,5 +25,7 @@ case "$prompt" in *"Tire até 3 frases de exemplo"*)
   printf '{"type":"result","result":"","is_error":false,"structured_output":{"exemplos":[{"ingles":"**He told a joke to break the ice.**","traducao":"Ele contou uma piada para quebrar o gelo.","audio":1},{"ingles":"Let us break the ice.","traducao":"Vamos quebrar o gelo.","audio":7},{"ingles":"","traducao":"vazia","audio":0}],"phrasal_verb":false,"motivo":"%s"}}\n' "$obs"; exit 0 ;; esac
 case "$entrada" in *"<texto>"*"TEXTO DO ACERVO"*"</texto>"*) obs="$obs Recebeu o texto pela entrada." ;; esac
 case "$prompt" in *"Capítulos do texto (para o campo secao): \"Governo Lula\""*) obs="$obs Recebeu os capítulos." ;; esac
+case "$entrada" in *"<marcacao>"*"TRECHO MARCADO"*"</marcacao>"*) obs="$obs Recebeu a marcação pela entrada." ;; esac
+case "$prompt" in *"cartões de uma marcação da Biblioteca"*) obs="$obs Seguiu a instrução da marcação." ;; esac
 case "$prompt" in *"gerar-do-texto"*|*"cartões de um texto do Acervo"*) obs="$obs Seguiu a instrução do texto." ;; esac
 printf '{"type":"result","result":"","is_error":false,"structured_output":{"nome_baralho":"Presidentes do Brasil no século 21","observacoes":"%s","cartoes":[{"frente":"Quem foi presidente do Brasil de 2003 a 2010?","verso":"Luiz Inácio Lula da Silva","tags":"presidentes","imagem":"Luiz Inácio Lula da Silva","secao":"## governo lula"},{"frente":"Quem sucedeu Lula em 2011?","verso":"Dilma Rousseff","tags":"presidentes","imagem":""},{"frente":"  ","verso":"cartão vazio, deve sumir","tags":"","imagem":""}]}}\n' "$obs"

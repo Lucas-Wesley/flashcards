@@ -5,6 +5,7 @@ import BuscaDeImagem from './BuscaDeImagem.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, api, lembrar } from './api.js'
 import { vencimento } from './tempo.js'
 import { contextoDoCartao, termoDaBusca } from './busca.js'
+import { ondeAbre } from './fonte.js'
 
 // Adicionar (sem id) ou editar (com id) uma nota. Ao adicionar, o baralho, o tipo e as tags ficam
 // para a próxima, e o foco volta para a frente: dá para cadastrar uma lista em sequência.
@@ -221,7 +222,7 @@ onMounted(carregar)
       <div v-if="dados.fonte" class="imagem">
         <span class="rotulo-campo">Fonte <span class="suave">· o trecho de onde o cartão saiu</span></span>
         <div class="com-imagem">
-          <a :href="dados.fonte" target="_blank" rel="noopener">Abrir no Acervo</a>
+          <a :href="dados.fonte" target="_blank" rel="noopener">Abrir {{ ondeAbre(dados.fonte) }}</a>
           <button type="button" class="botao" @click="dados.fonte = ''">Remover link</button>
         </div>
       </div>

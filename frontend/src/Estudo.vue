@@ -3,6 +3,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue
 import Icone from './Icone.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, REVISAO, api } from './api.js'
 import { hora, intervalo } from './tempo.js'
+import { ondeAbre } from './fonte.js'
 
 // A sessão de estudo: frente, "Mostrar resposta", verso e as notas. Teclado: espaço ou Enter
 // mostra a resposta (e depois vale "Bom"), 1 a 4 respondem, 5 é "Amanhã", R repete o áudio, Z desfaz,
@@ -176,7 +177,7 @@ onBeforeUnmount(() => {
           <Icone nome="som" />
         </button>
         <img v-if="cartao.imagem" class="foto" :src="`/api/imagens/${cartao.imagem}`" alt="" />
-        <a v-if="cartao.fonte" class="fonte suave" :href="cartao.fonte" target="_blank" rel="noopener">Ver no Acervo</a>
+        <a v-if="cartao.fonte" class="fonte suave" :href="cartao.fonte" target="_blank" rel="noopener">Ver {{ ondeAbre(cartao.fonte) }}</a>
       </template>
     </section>
 

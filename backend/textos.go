@@ -8,13 +8,26 @@ import (
 	"unicode/utf8"
 )
 
-// Flashcards de um texto do Acervo: lá, o Lucas aperta "Gerar flashcards" num Tema, num capítulo ou
+// Flashcards de um texto do Acervo (ou de uma marcação da Biblioteca, F36): lá, o Lucas aperta "Gerar flashcards" num Tema, num capítulo ou
 // numa Referência, e o Acervo manda o texto para cá. Vira um pedido à IA como os outros (fila,
 // proposta, revisão), só que os cartões saem do texto, sem a IA ir à internet. O Lucas escolhe lá o
 // baralho: um que já existe (os cartões de mesma frente são atualizados) ou um novo, com o nome
 // que ele deu. Cada cartão guarda o link do capítulo de onde saiu, para abrir no Acervo.
 
 const origemAcervo = "acervo"
+
+// Marcação da Biblioteca (F36): o texto é o trecho marcado (curto), e o contexto traz o livro, o
+// capítulo, a nota do Lucas e a página em volta. A IA tira poucos cartões, só do trecho.
+const (
+	origemBiblioteca    = "biblioteca"
+	tamanhoMaximoTrecho = 20_000
+	cartoesDaMarcacao   = 3
+)
+
+// doTexto: o pedido traz um texto pronto (do Acervo ou de uma marcação), em vez de um pedido livre.
+func (g *geracao) doTexto() bool {
+	return g.Origem == origemAcervo || g.Origem == origemBiblioteca
+}
 
 // Um Tema inteiro pode ser grande; acima disso o Acervo pede para mandar por capítulo.
 const tamanhoMaximoDoTexto = 150_000
@@ -36,6 +49,7 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 		Link      string         `json:"link"` // o texto no Acervo
 		Secoes    []secaoDoTexto `json:"secoes"`
 		Tipo      string         `json:"tipo"`
+		Origem    string         `json:"origem"` // "acervo" (o padrão) ou "biblioteca"
 	}
 	if !lerCorpo(w, r, &corpo) {
 		return
@@ -44,12 +58,29 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 	if corpo.Tipo == "" {
 		corpo.Tipo = "basico"
 	}
+	if corpo.Origem == "" {
+		corpo.Origem = origemAcervo
+	}
 	tamanho := utf8.RuneCountInString(corpo.Texto)
+	marcacao := corpo.Origem == origemBiblioteca
+	quantidade := limiteDeCartoes(corpo.Texto)
+	if marcacao {
+		quantidade = cartoesDaMarcacao
+	}
 	switch {
+	case corpo.Origem != origemAcervo && !marcacao:
+		erroJSON(w, http.StatusBadRequest, "Origem inválida.")
+		return
 	case corpo.Titulo == "":
 		erroJSON(w, http.StatusBadRequest, "Diga de onde vem o texto.")
 		return
-	case tamanho < 200:
+	case marcacao && tamanho < 2:
+		erroJSON(w, http.StatusBadRequest, "A marcação está vazia.")
+		return
+	case marcacao && tamanho > tamanhoMaximoTrecho:
+		erroJSON(w, http.StatusRequestEntityTooLarge, "A marcação é grande demais para um cartão. Marque um trecho menor.")
+		return
+	case !marcacao && tamanho < 200:
 		erroJSON(w, http.StatusBadRequest, "O texto é curto demais para virar cartões.")
 		return
 	case tamanho > tamanhoMaximoDoTexto:
@@ -83,8 +114,8 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 
 	res, err := a.db.ExecContext(r.Context(), `INSERT INTO geracoes (origem, pedido, texto, contexto, link, nome_sugerido, secoes, quantidade, tipo, baralho_id, estado, criado_em)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		origemAcervo, corpo.Titulo, corpo.Texto, strings.TrimSpace(corpo.Contexto), link, corpo.Baralho, string(jsonSecoes),
-		limiteDeCartoes(corpo.Texto), corpo.Tipo, corpo.BaralhoID, naFila, a.agora())
+		corpo.Origem, corpo.Titulo, corpo.Texto, strings.TrimSpace(corpo.Contexto), link, corpo.Baralho, string(jsonSecoes),
+		quantidade, corpo.Tipo, corpo.BaralhoID, naFila, a.agora())
 	if err != nil {
 		falha(w, err)
 		return
@@ -128,6 +159,19 @@ func pedidoDoTexto(g *geracao, destino, pasta string) pedidoClaude {
 			titulos = append(titulos, fmt.Sprintf("%q", s.Titulo))
 		}
 		destino += "\n\nCapítulos do texto (para o campo secao): " + strings.Join(titulos, ", ") + "."
+	}
+	if g.Origem == origemBiblioteca {
+		return pedidoClaude{
+			pasta: pasta,
+			regra: "gerar-da-marcacao.md",
+			instrucao: fmt.Sprintf("O Lucas marcou um trecho de um livro na Biblioteca e quer um cartão dele.\n\n"+
+				"De onde vem: %q\n%s\n\nO trecho marcado vem junto com esta mensagem, entre <marcacao> e </marcacao>.\n\n"+
+				"Quantidade: em geral um cartão; no máximo %d notas.\nTipo das notas: %s.\n%s\n\nDevolva os dados no formato pedido.",
+				g.Pedido, g.Contexto, g.Quantidade, nomesDosTipos[g.Tipo], destino),
+			esquema:     esquemaProposta,
+			entrada:     "<marcacao>\n" + g.Texto + "\n</marcacao>\n",
+			semInternet: true,
+		}
 	}
 	return pedidoClaude{
 		pasta: pasta,
