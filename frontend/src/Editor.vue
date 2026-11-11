@@ -2,6 +2,7 @@
 import { computed, inject, nextTick, onMounted, ref } from 'vue'
 import AbasAdicionar from './AbasAdicionar.vue'
 import BuscaDeImagem from './BuscaDeImagem.vue'
+import Info from './Info.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, api, lembrar } from './api.js'
 import { vencimento } from './tempo.js'
 import { contextoDoCartao, termoDaBusca } from './busca.js'
@@ -27,6 +28,7 @@ const trazendoImagem = ref(false)
 const TIPOS = [
   { valor: 'basico', nome: 'Frente e verso' },
   { valor: 'invertido', nome: 'Nos dois sentidos' },
+  { valor: 'leitura', nome: 'Leitura' },
 ]
 
 const editando = computed(() => !!props.id)
@@ -163,7 +165,13 @@ onMounted(carregar)
           </select>
         </label>
         <div class="tipo">
-          <span class="rotulo-campo">Tipo</span>
+          <span class="rotulo-campo"
+            >Tipo
+            <Info
+              ><strong>Frente e verso</strong>: a frente é a pergunta; o verso, a resposta curta. <strong>Nos dois sentidos</strong>: dois cartões, frente → verso e verso →
+              frente; bom para vocabulário. <strong>Leitura</strong>: a frente é uma pergunta aberta; o verso, um texto para ler, como o resumo de uma história.</Info
+            ></span
+          >
           <div class="pilulas" role="radiogroup" aria-label="Tipo de cartão">
             <button
               v-for="t in TIPOS"
@@ -180,13 +188,6 @@ onMounted(carregar)
           </div>
         </div>
       </div>
-      <p class="ajuda">
-        {{
-          dados.tipo === 'invertido'
-            ? 'Cria dois cartões: frente → verso e verso → frente. Bom para vocabulário.'
-            : 'Um cartão: a frente é a pergunta, o verso é a resposta.'
-        }}
-      </p>
 
       <label>
         <span class="rotulo-campo">Frente</span>
@@ -194,7 +195,7 @@ onMounted(carregar)
       </label>
       <label>
         <span class="rotulo-campo">Verso</span>
-        <textarea v-model="dados.verso" class="campo texto-cartao" rows="3" aria-label="Verso" />
+        <textarea v-model="dados.verso" class="campo texto-cartao" :class="{ leitura: dados.tipo === 'leitura' }" :rows="dados.tipo === 'leitura' ? 12 : 3" aria-label="Verso" />
       </label>
       <div v-if="dados.audio" class="imagem">
         <span class="rotulo-campo">Áudio <span class="suave">· a pronúncia da frente</span></span>
@@ -275,6 +276,9 @@ onMounted(carregar)
 }
 
 .rotulo-campo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   color: var(--texto-suave);
   font-size: 0.82rem;
   font-weight: 500;
@@ -317,11 +321,11 @@ select.campo {
   min-height: 38px;
 }
 
-.ajuda {
-  margin: -8px 0 0;
-  color: var(--texto-fraco);
-  font-size: 0.8rem;
+textarea.leitura {
+  font-size: 1rem;
+  line-height: 1.65;
 }
+
 
 .atalho {
   font-size: 0.75rem;

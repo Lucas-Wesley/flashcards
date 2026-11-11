@@ -67,6 +67,9 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 	if marcacao {
 		quantidade = cartoesDaMarcacao
 	}
+	if corpo.Tipo == "leitura" {
+		quantidade = cartoesDeLeitura
+	}
 	switch {
 	case corpo.Origem != origemAcervo && !marcacao:
 		erroJSON(w, http.StatusBadRequest, "Origem inválida.")
@@ -86,7 +89,7 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 	case tamanho > tamanhoMaximoDoTexto:
 		erroJSON(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("O texto tem %d mil caracteres; o máximo é %d mil. Gere por capítulo.", tamanho/1000, tamanhoMaximoDoTexto/1000))
 		return
-	case tiposDeNota[corpo.Tipo] == 0:
+	case tiposDeNota[corpo.Tipo] == 0 || (marcacao && !tipoDePergunta(corpo.Tipo)):
 		erroJSON(w, http.StatusBadRequest, "Tipo de nota inválido.")
 		return
 	case corpo.BaralhoID != "" && !a.existeBaralho(r.Context(), corpo.BaralhoID):
@@ -127,6 +130,9 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 
 // limiteDeCartoes: o teto que a IA recebe. Ela decide quantos o texto rende; um texto longo não
 // deve virar uma pilha rasa de cartões, nem um curto ser esticado.
+// cartoesDeLeitura (F38): um texto vira um cartão de leitura; mais só quando muda de assunto.
+const cartoesDeLeitura = 4
+
 func limiteDeCartoes(texto string) int {
 	return min(100, max(5, len(strings.Fields(texto))/80))
 }
@@ -170,6 +176,19 @@ func pedidoDoTexto(g *geracao, destino, pasta string) pedidoClaude {
 				g.Pedido, g.Contexto, g.Quantidade, nomesDosTipos[g.Tipo], destino),
 			esquema:     esquemaProposta,
 			entrada:     "<marcacao>\n" + g.Texto + "\n</marcacao>\n",
+			semInternet: true,
+		}
+	}
+	if g.Tipo == "leitura" {
+		return pedidoClaude{
+			pasta: pasta,
+			regra: "gerar-leitura.md",
+			instrucao: fmt.Sprintf("O Lucas quer flashcards de leitura de um texto do Acervo, a base de conhecimento dele.\n\n"+
+				"Texto: %q\n%s\n\nO texto vem junto com esta mensagem, entre <texto> e </texto>.\n\n"+
+				"Quantidade: um cartão; mais só se o texto mudar de assunto, no máximo %d.\n%s\n\nDevolva os dados no formato pedido.",
+				g.Pedido, g.Contexto, g.Quantidade, destino),
+			esquema:     esquemaProposta,
+			entrada:     "<texto>\n" + g.Texto + "\n</texto>\n",
 			semInternet: true,
 		}
 	}

@@ -360,7 +360,7 @@ func (a *app) handleLink(w http.ResponseWriter, r *http.Request) {
 		corpo.Tipo = "basico"
 	}
 	ctx := r.Context()
-	if tiposDeNota[corpo.Tipo] == 0 {
+	if !tipoDePergunta(corpo.Tipo) {
 		erroJSON(w, http.StatusBadRequest, "Tipo de nota inválido.")
 		return
 	}

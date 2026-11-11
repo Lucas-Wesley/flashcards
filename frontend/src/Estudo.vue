@@ -1,9 +1,9 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import Face from './Face.vue'
 import Icone from './Icone.vue'
 import { APRENDENDO, NOVO, REAPRENDENDO, REVISAO, api, lembrar } from './api.js'
 import { hora, intervalo } from './tempo.js'
-import { ondeAbre } from './fonte.js'
 
 // A sessão de estudo: frente, "Mostrar resposta", verso e as notas. Teclado: espaço ou Enter
 // mostra a resposta (e depois vale "Bom"), 1 a 4 respondem, 5 é "Amanhã", R repete o áudio, Z desfaz,
@@ -11,12 +11,16 @@ import { ondeAbre } from './fonte.js'
 // ou na resposta do cartão invertido).
 // "Amanhã" conta como erro para o algoritmo, mas o cartão sai do dia em vez de voltar em minutos.
 // Os botões são grandes de propósito: a mesma tela serve no celular e no navegador da TV.
-// Sem id, é o "Estudar" com todos os baralhos misturados: cada cartão mostra de que baralho é, e a
-// resposta conta no baralho dele, como se tivesse sido estudado por lá.
+// O escopo é um baralho (o id), um tema ("tema/Inglês", F38) ou tudo ("tudo"). Com tema ou tudo, os
+// baralhos se misturam: cada cartão mostra de que baralho é, e a resposta conta no baralho dele, como
+// se tivesse sido estudado por lá.
 // "Mostrar na TV" (F37): o celular continua sendo o estudo e manda cada cena à página da TV
 // (http://192.168.1.20:8453), que só mostra. A escolha fica guardada para a próxima vez.
-const props = defineProps({ id: { type: String, default: '' } })
-const todos = computed(() => !props.id)
+const props = defineProps({ escopo: { type: String, required: true } })
+const tema = computed(() => (props.escopo.startsWith('tema/') ? props.escopo.slice('tema/'.length) : ''))
+const todos = computed(() => props.escopo === 'tudo')
+const id = computed(() => (todos.value || tema.value ? '' : props.escopo))
+const doTema = computed(() => (tema.value ? `?tema=${encodeURIComponent(tema.value)}` : ''))
 const recado = inject('recado')
 
 const estudo = ref(null)
@@ -49,7 +53,7 @@ const textoDoFim = computed(() => {
   const e = estudo.value
   if (!e) return ''
   const feitos = e.feitos_hoje
-    ? `${e.feitos_hoje} ${e.feitos_hoje === 1 ? 'revisão' : 'revisões'} ${todos.value ? 'hoje, somando os baralhos' : 'neste baralho hoje'}.`
+    ? `${e.feitos_hoje} ${e.feitos_hoje === 1 ? 'revisão' : 'revisões'} hoje.`
     : 'Nada para estudar agora.'
   return e.espera_ate ? `${feitos} Um cartão em aprendizado volta às ${hora(e.espera_ate)}.` : feitos
 })
@@ -60,7 +64,7 @@ function enviarCena() {
   const c = cartao.value
   const cena = {
     ativo: true,
-    todos: todos.value,
+    todos: !id.value,
     baralho: estudo.value.baralho?.nome || '',
     contagem: estudo.value.contagem,
     fila: fila.value,
@@ -125,7 +129,7 @@ async function aplicar(dados) {
 
 async function carregar() {
   try {
-    await aplicar(await api(todos.value ? '/api/estudo' : `/api/baralhos/${props.id}/estudo`))
+    await aplicar(await api(id.value ? `/api/baralhos/${id.value}/estudo` : `/api/estudo${doTema.value}`))
     erro.value = ''
   } catch (e) {
     erro.value = e.status === 0 ? 'Sem conexão: o estudo só funciona na rede de casa.' : e.message
@@ -145,7 +149,7 @@ async function responder(nota) {
     await aplicar(
       await api(`/api/cartoes/${cartao.value.id}/responder`, {
         metodo: 'POST',
-        corpo: { nota, repeticoes: cartao.value.repeticoes, duracao_ms: Date.now() - mostradoEm, todos: todos.value },
+        corpo: { nota, repeticoes: cartao.value.repeticoes, duracao_ms: Date.now() - mostradoEm, todos: todos.value, tema: tema.value },
       }),
     )
   } catch (e) {
@@ -160,7 +164,7 @@ async function desfazer() {
   if (enviando.value) return
   enviando.value = true
   try {
-    await aplicar(await api(todos.value ? '/api/estudo/desfazer' : `/api/baralhos/${props.id}/desfazer`, { metodo: 'POST' }))
+    await aplicar(await api(id.value ? `/api/baralhos/${id.value}/desfazer` : `/api/estudo/desfazer${doTema.value}`, { metodo: 'POST' }))
     recado('Resposta desfeita.')
   } catch (e) {
     recado(e.status === 404 ? 'Nada para desfazer.' : e.message, e.status !== 404)
@@ -170,7 +174,7 @@ async function desfazer() {
 }
 
 function voltar() {
-  location.hash = todos.value ? '#/baralhos' : `#/baralho/${props.id}`
+  location.hash = id.value ? `#/baralho/${id.value}` : '#/estudar'
 }
 
 function aoTeclar(ev) {
@@ -208,10 +212,10 @@ onBeforeUnmount(() => {
 <template>
   <div class="estudo">
     <header class="barra vidro">
-      <button class="botao icone" :aria-label="todos ? 'Voltar aos baralhos' : 'Voltar ao baralho'" title="Voltar (Esc)" @click="voltar"><Icone nome="voltar" /></button>
+      <button class="botao icone" aria-label="Voltar" title="Voltar (Esc)" @click="voltar"><Icone nome="voltar" /></button>
       <div class="onde">
         <span class="baralho"
-          ><span v-if="todos" class="modo">Todos<template v-if="estudo?.baralho.nome"> · </template></span>{{ estudo?.baralho.nome }}</span
+          ><span v-if="!id" class="modo">{{ tema || 'Todos' }}<template v-if="estudo?.baralho.nome"> · </template></span>{{ estudo?.baralho.nome }}</span
         >
         <span v-if="estudo" class="contagem" aria-label="Para hoje">
           <span class="novos" :class="{ atual: fila === 'novos' }" title="Novos">{{ estudo.contagem.novos }}</span>
@@ -241,36 +245,15 @@ onBeforeUnmount(() => {
 
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
-    <section v-if="cartao" class="face" :aria-busy="enviando">
-      <div class="frente texto-cartao">{{ cartao.frente }}</div>
-      <button v-if="audioNaPergunta" class="botao icone som" aria-label="Ouvir de novo" title="Ouvir de novo (R)" @click="tocar"><Icone nome="som" /></button>
-      <template v-if="mostrando">
-        <hr />
-        <div class="verso texto-cartao">{{ cartao.verso }}</div>
-        <button v-if="cartao.audio && !audioNaPergunta" class="botao icone som" aria-label="Ouvir de novo" title="Ouvir de novo (R)" @click="tocar">
-          <Icone nome="som" />
-        </button>
-        <img v-if="cartao.imagem" class="foto" :src="`/api/imagens/${cartao.imagem}`" alt="" />
-        <a v-if="cartao.fonte" class="fonte suave" :href="cartao.fonte" target="_blank" rel="noopener">Ver {{ ondeAbre(cartao.fonte) }}</a>
-      </template>
-    </section>
+    <Face v-if="cartao" :cartao="cartao" :mostrando="mostrando" :audio-na-pergunta="audioNaPergunta" :aria-busy="enviando" @tocar="tocar" />
 
     <div v-else-if="estudo" class="fim">
       <p class="fim-titulo">Pronto por hoje.</p>
-      <p class="suave">
-        {{
-          estudo.feitos_hoje
-            ? `${estudo.feitos_hoje} ${estudo.feitos_hoje === 1 ? 'revisão' : 'revisões'} ${todos ? 'hoje, somando os baralhos' : 'neste baralho hoje'}.`
-            : 'Nada para estudar agora.'
-        }}
-      </p>
-      <p v-if="estudo.espera_ate" class="suave">Um cartão em aprendizado volta às {{ hora(estudo.espera_ate) }}; esta tela se atualiza sozinha.</p>
-      <div v-if="todos" class="linha-acoes centro">
-        <a class="botao" href="#/baralhos">Voltar aos baralhos</a>
-      </div>
-      <div v-else class="linha-acoes centro">
-        <a class="botao" :href="`#/baralho/${id}`">Voltar ao baralho</a>
-        <a class="botao" :href="`#/adicionar/${id}`">Adicionar cartões</a>
+      <p class="suave">{{ textoDoFim }}</p>
+      <!-- Acabada a fila, dá para seguir no aleatório, que não mexe no agendamento. -->
+      <div class="linha-acoes centro">
+        <a class="botao principal" :href="`#/aleatorio/${escopo}`"><Icone nome="aleatorio" /> Aleatório</a>
+        <button class="botao" @click="voltar">Voltar</button>
       </div>
     </div>
 
@@ -387,56 +370,13 @@ onBeforeUnmount(() => {
   margin: 24px auto;
 }
 
-.face {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: clamp(32px, 9vh, 96px) 20px 32px;
-  text-align: center;
-}
 
-.texto-cartao {
-  font-family: var(--leitura);
-  line-height: 1.5;
-  overflow-wrap: break-word;
-  white-space: pre-wrap;
-}
 
-.frente {
-  font-size: clamp(1.5rem, 4vw, 2.1rem);
-  font-weight: 500;
-}
 
-.verso {
-  font-size: clamp(1.25rem, 3.2vw, 1.6rem);
-  color: var(--texto);
-}
 
-.som {
-  margin: 14px auto 0;
-}
 
-.foto {
-  display: block;
-  max-width: min(100%, 420px);
-  max-height: 40vh;
-  margin: 24px auto 0;
-  border-radius: var(--raio);
-  object-fit: contain;
-}
 
-.fonte {
-  display: block;
-  width: fit-content;
-  margin: 20px auto 0;
-  font-size: 0.85rem;
-}
 
-hr {
-  width: min(320px, 70%);
-  margin: 28px auto;
-  border: 0;
-  border-top: 1px solid var(--linha-forte);
-}
 
 .fim {
   max-width: 480px;

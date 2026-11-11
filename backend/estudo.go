@@ -134,6 +134,8 @@ func sorteio(id string) uint32 {
 type cartaoDeEstudo struct {
 	ID     string `json:"id"`
 	NotaID string `json:"nota_id"`
+	// Tipo da nota: o verso de "leitura" é um texto para ler, e aparece de outro jeito (F38).
+	Tipo   string `json:"tipo"`
 	Frente string `json:"frente"`
 	Verso  string `json:"verso"`
 	Tags   string `json:"tags"`
@@ -149,11 +151,27 @@ type cartaoDeEstudo struct {
 	Repeticoes int64 `json:"repeticoes"`
 }
 
+// juntos: o "Estudar" que mistura baralhos, todos ou os de um tema (F38). Vazio, é um baralho só.
+type juntos struct {
+	Todos bool   `json:"todos"`
+	Tema  string `json:"tema,omitempty"`
+}
+
+func (j juntos) mistura() bool { return j.Todos || j.Tema != "" }
+
+func juntosDoPedido(r *http.Request) juntos {
+	if tema := r.URL.Query().Get("tema"); tema != "" {
+		return juntos{Tema: tema}
+	}
+	return juntos{Todos: true}
+}
+
 type estudo struct {
-	// Baralho é o do cartão da vez (no "Estudar" com todos, muda a cada cartão).
+	// Baralho é o do cartão da vez (no "Estudar" com vários baralhos, muda a cada cartão).
 	Baralho baralho `json:"baralho"`
-	// Todos: a fila mistura todos os baralhos; a contagem e as revisões de hoje são a soma deles.
-	Todos      bool            `json:"todos"`
+	// Todos: a fila mistura todos os baralhos (ou, com Tema, os do tema); a contagem e as revisões
+	// de hoje são a soma deles.
+	juntos
 	Contagem   contagem        `json:"contagem"`
 	FeitosHoje int             `json:"feitos_hoje"`
 	Cartao     *cartaoDeEstudo `json:"cartao"`
@@ -166,9 +184,9 @@ type estudo struct {
 // baralho mantém a própria fila e os próprios limites, e o próximo cartão é o que vem antes entre
 // os próximos de cada um. Com "forcar", mostra aquele cartão (o que acabou de ser desfeito) em vez
 // do próximo da fila.
-func (a *app) montarEstudo(ctx context.Context, baralhos []baralho, todos bool, forcar *cartao) (estudo, error) {
-	e := estudo{Todos: todos}
-	if !todos && len(baralhos) > 0 {
+func (a *app) montarEstudo(ctx context.Context, baralhos []baralho, j juntos, forcar *cartao) (estudo, error) {
+	e := estudo{juntos: j}
+	if !j.mistura() && len(baralhos) > 0 {
 		e.Baralho = baralhos[0]
 	}
 	var escolhido *cartao
@@ -216,21 +234,26 @@ func (a *app) montarEstudo(ctx context.Context, baralhos []baralho, todos bool, 
 	e.EsperaAte = ""
 	c, b := escolhido, filaEscolhida.b
 	e.Baralho = b
-	var frente, verso, tags, imagem, audio, fonte string
-	if err := a.db.QueryRowContext(ctx, `SELECT frente, verso, tags, imagem, audio, fonte FROM notas WHERE id = ?`, c.NotaID).Scan(&frente, &verso, &tags, &imagem, &audio, &fonte); err != nil {
+	var tipo, frente, verso, tags, imagem, audio, fonte string
+	if err := a.db.QueryRowContext(ctx, `SELECT tipo, frente, verso, tags, imagem, audio, fonte FROM notas WHERE id = ?`, c.NotaID).Scan(&tipo, &frente, &verso, &tags, &imagem, &audio, &fonte); err != nil {
 		return e, err
 	}
 	if c.Sentido == 1 {
 		frente, verso = verso, frente
 	}
-	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Fonte: fonte, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
+	e.Cartao = &cartaoDeEstudo{ID: c.ID, NotaID: c.NotaID, Tipo: tipo, Frente: frente, Verso: verso, Tags: tags, Imagem: imagem, Audio: audio, Fonte: fonte, Sentido: c.Sentido, Estado: c.Estado, Repeticoes: c.Repeticoes}
 	var err error
 	e.Previsoes, err = a.rel.previsoes(*c, b.Retencao, filaEscolhida.agora)
 	return e, err
 }
 
-func (a *app) todosOsBaralhos(ctx context.Context) ([]baralho, error) {
-	rows, err := a.db.QueryContext(ctx, `SELECT `+colunasBaralho+` FROM baralhos ORDER BY nome COLLATE NOCASE`)
+// baralhosDe: todos os baralhos ou, com um tema, só os dele.
+func (a *app) baralhosDe(ctx context.Context, j juntos) ([]baralho, error) {
+	filtro, args := ``, []any{}
+	if j.Tema != "" {
+		filtro, args = `WHERE tema = ? `, []any{j.Tema}
+	}
+	rows, err := a.db.QueryContext(ctx, `SELECT `+colunasBaralho+` FROM baralhos `+filtro+`ORDER BY nome COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,16 +269,16 @@ func (a *app) todosOsBaralhos(ctx context.Context) ([]baralho, error) {
 	return lista, rows.Err()
 }
 
-// estudoDe monta a tela seguinte do mesmo modo do pedido: de um baralho, ou de todos.
-func (a *app) estudoDe(ctx context.Context, b baralho, todos bool, forcar *cartao) (estudo, error) {
-	if !todos {
-		return a.montarEstudo(ctx, []baralho{b}, false, forcar)
+// estudoDe monta a tela seguinte do mesmo modo do pedido: de um baralho, de um tema ou de todos.
+func (a *app) estudoDe(ctx context.Context, b baralho, j juntos, forcar *cartao) (estudo, error) {
+	if !j.mistura() {
+		return a.montarEstudo(ctx, []baralho{b}, j, forcar)
 	}
-	lista, err := a.todosOsBaralhos(ctx)
+	lista, err := a.baralhosDe(ctx, j)
 	if err != nil {
 		return estudo{}, err
 	}
-	return a.montarEstudo(ctx, lista, true, forcar)
+	return a.montarEstudo(ctx, lista, j, forcar)
 }
 
 func (a *app) handleEstudo(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +286,7 @@ func (a *app) handleEstudo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	e, err := a.estudoDe(r.Context(), b, false, nil)
+	e, err := a.estudoDe(r.Context(), b, juntos{}, nil)
 	if err != nil {
 		falha(w, err)
 		return
@@ -271,9 +294,9 @@ func (a *app) handleEstudo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, e)
 }
 
-// handleEstudoGeral: o "Estudar" com todos os baralhos misturados.
+// handleEstudoGeral: o "Estudar" com todos os baralhos misturados, ou os de um tema (?tema=).
 func (a *app) handleEstudoGeral(w http.ResponseWriter, r *http.Request) {
-	e, err := a.estudoDe(r.Context(), baralho{}, true, nil)
+	e, err := a.estudoDe(r.Context(), baralho{}, juntosDoPedido(r), nil)
 	if err != nil {
 		falha(w, err)
 		return
@@ -281,15 +304,15 @@ func (a *app) handleEstudoGeral(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, e)
 }
 
-// handleResponder aplica a nota e já devolve o próximo cartão do baralho (ou, com "todos", o próximo
-// de todos os baralhos). A revisão fica registrada no baralho do cartão, como se ele tivesse sido
+// handleResponder aplica a nota e já devolve o próximo cartão do baralho (ou, com "todos" ou um
+// tema, o próximo deles). A revisão fica registrada no baralho do cartão, como se ele tivesse sido
 // estudado por lá.
 func (a *app) handleResponder(w http.ResponseWriter, r *http.Request) {
 	var corpo struct {
 		Nota       int   `json:"nota"`
 		Repeticoes int64 `json:"repeticoes"`
 		DuracaoMs  int64 `json:"duracao_ms"`
-		Todos      bool  `json:"todos"`
+		juntos
 	}
 	if !lerCorpo(w, r, &corpo) {
 		return
@@ -345,7 +368,7 @@ func (a *app) handleResponder(w http.ResponseWriter, r *http.Request) {
 		falha(w, err)
 		return
 	}
-	e, err := a.estudoDe(ctx, b, corpo.Todos, nil)
+	e, err := a.estudoDe(ctx, b, corpo.juntos, nil)
 	if err != nil {
 		falha(w, err)
 		return
@@ -359,15 +382,16 @@ func (a *app) handleDesfazer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.desfazer(w, r, b, false)
+	a.desfazer(w, r, b, juntos{})
 }
 
-// handleDesfazerGeral volta a última resposta de qualquer baralho (no "Estudar" com todos).
+// handleDesfazerGeral volta a última resposta de qualquer baralho (no "Estudar" com todos) ou de um
+// baralho do tema (?tema=).
 func (a *app) handleDesfazerGeral(w http.ResponseWriter, r *http.Request) {
-	a.desfazer(w, r, baralho{}, true)
+	a.desfazer(w, r, baralho{}, juntosDoPedido(r))
 }
 
-func (a *app) desfazer(w http.ResponseWriter, r *http.Request, b baralho, todos bool) {
+func (a *app) desfazer(w http.ResponseWriter, r *http.Request, b baralho, j juntos) {
 	ctx := r.Context()
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -380,7 +404,9 @@ func (a *app) desfazer(w http.ResponseWriter, r *http.Request, b baralho, todos 
 	var antes string
 	ultima := `SELECT id, antes FROM revisoes WHERE baralho_id = ? ORDER BY id DESC LIMIT 1`
 	args := []any{b.ID}
-	if todos {
+	if j.Tema != "" {
+		ultima, args = `SELECT id, antes FROM revisoes WHERE baralho_id IN (SELECT id FROM baralhos WHERE tema = ?) ORDER BY id DESC LIMIT 1`, []any{j.Tema}
+	} else if j.Todos {
 		ultima, args = `SELECT id, antes FROM revisoes ORDER BY id DESC LIMIT 1`, nil
 	}
 	err = tx.QueryRowContext(ctx, ultima, args...).Scan(&id, &antes)
@@ -409,7 +435,7 @@ func (a *app) desfazer(w http.ResponseWriter, r *http.Request, b baralho, todos 
 		falha(w, err)
 		return
 	}
-	e, err := a.estudoDe(ctx, b, todos, &c)
+	e, err := a.estudoDe(ctx, b, j, &c)
 	if err != nil {
 		falha(w, err)
 		return

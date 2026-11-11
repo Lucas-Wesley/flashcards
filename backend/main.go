@@ -124,6 +124,7 @@ func migrar(db *sql.DB) error {
 		{"geracoes", "nome_sugerido", `TEXT NOT NULL DEFAULT ''`},
 		{"geracoes", "secoes", `TEXT NOT NULL DEFAULT ''`},
 		{"notas", "fonte", `TEXT NOT NULL DEFAULT ''`},
+		{"baralhos", "tema", `TEXT NOT NULL DEFAULT ''`},
 	}
 	for _, n := range novas {
 		var existe int

@@ -12,6 +12,8 @@ import (
 
 // Uma nota é o conteúdo (frente, verso, tags); os cartões são o que se estuda. A nota "básica" dá
 // um cartão; a "invertida" dá dois, um em cada sentido, para idiomas (casa → house e house → casa).
+// A de "leitura" (F38) dá um cartão cujo verso é um texto para ler: uma história ou um assunto
+// resumido, e não uma resposta curta.
 type nota struct {
 	ID           string         `json:"id"`
 	BaralhoID    string         `json:"baralho_id"`
@@ -37,7 +39,10 @@ type cartaoResumo struct {
 	Suspenso      bool   `json:"suspenso"`
 }
 
-var tiposDeNota = map[string]int{"basico": 1, "invertido": 2}
+var tiposDeNota = map[string]int{"basico": 1, "invertido": 2, "leitura": 1}
+
+// Pedir cartões de perguntas (à IA, de um link) aceita só estes; leitura vem de um texto do Acervo.
+func tipoDePergunta(t string) bool { return t == "basico" || t == "invertido" }
 
 // limparTags aceita tags separadas por espaço ou vírgula e tira as repetidas.
 func limparTags(s string) string {
@@ -79,6 +84,8 @@ func (d *dadosDaNota) validar() string {
 		return "Escreva a frente do cartão."
 	case d.Tipo == "invertido" && d.Verso == "":
 		return "No cartão nos dois sentidos, o verso também é pergunta: escreva o verso."
+	case d.Tipo == "leitura" && d.Verso == "":
+		return "No cartão de leitura, escreva o texto do verso."
 	case d.Imagem != "" && !nomeDeImagem.MatchString(d.Imagem):
 		return "Imagem inválida."
 	case d.Audio != "" && !nomeDeAudio.MatchString(d.Audio):

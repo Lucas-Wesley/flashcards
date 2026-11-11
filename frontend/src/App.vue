@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import Ajustes from './Ajustes.vue'
+import Aleatorio from './Aleatorio.vue'
 import Baralho from './Baralho.vue'
 import Baralhos from './Baralhos.vue'
 import Cartoes from './Cartoes.vue'
 import Editor from './Editor.vue'
+import EscolherEstudo from './EscolherEstudo.vue'
 import Estudo from './Estudo.vue'
 import Geracao from './Geracao.vue'
 import Gerar from './Gerar.vue'
@@ -39,7 +41,7 @@ const MENU = [
 
 const secao = computed(() => {
   const n = rota.value.nome
-  if (['baralho', 'importar'].includes(n)) return 'baralhos'
+  if (['baralho', 'importar', 'estudar', 'aleatorio'].includes(n)) return 'baralhos'
   if (['link', 'gerar', 'novo-baralho'].includes(n)) return 'adicionar'
   if (n === 'geracao') return 'pedidos'
   if (n === 'nota') return 'cartoes'
@@ -117,7 +119,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app" :class="{ estudando: rota.nome === 'estudar' }">
+  <div class="app" :class="{ estudando: (rota.nome === 'estudar' && rota.param) || rota.nome === 'aleatorio' }">
     <aside class="menu" aria-label="Menu">
       <div class="marca"><span class="marca-icone"><Icone nome="baralhos" /></span>Flashcards</div>
       <nav>
@@ -138,7 +140,9 @@ onBeforeUnmount(() => {
     </aside>
 
     <main class="conteudo">
-      <Estudo v-if="rota.nome === 'estudar'" :key="rota.param" :id="rota.param" />
+      <Estudo v-if="rota.nome === 'estudar' && rota.param" :key="rota.param" :escopo="rota.param" />
+      <EscolherEstudo v-else-if="rota.nome === 'estudar'" />
+      <Aleatorio v-else-if="rota.nome === 'aleatorio'" :key="'aleatorio' + rota.param" :escopo="rota.param || 'tudo'" />
       <Baralho v-else-if="rota.nome === 'baralho'" :key="rota.param" :id="rota.param" />
       <Importar v-else-if="rota.nome === 'importar'" :key="rota.param" :id="rota.param" />
       <Editor v-else-if="rota.nome === 'adicionar'" :key="'adicionar' + rota.param" :baralho="rota.param" />

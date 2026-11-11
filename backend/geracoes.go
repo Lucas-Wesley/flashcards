@@ -249,6 +249,7 @@ func (a *app) terminar(id int64, estado, erro string, p *proposta) {
 var nomesDosTipos = map[string]string{
 	"basico":    "frente e verso (um cartão por nota)",
 	"invertido": "nos dois sentidos (cada nota vira dois cartões, frente → verso e verso → frente)",
+	"leitura":   "de leitura (a frente é uma pergunta aberta; o verso, um texto curto para ler)",
 }
 
 func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
@@ -401,7 +402,7 @@ func (a *app) handlePedirGeracao(w http.ResponseWriter, r *http.Request) {
 	case corpo.Quantidade < 1 || corpo.Quantidade > 100:
 		erroJSON(w, http.StatusBadRequest, "Peça de 1 a 100 cartões.")
 		return
-	case tiposDeNota[corpo.Tipo] == 0:
+	case !tipoDePergunta(corpo.Tipo):
 		erroJSON(w, http.StatusBadRequest, "Tipo de nota inválido.")
 		return
 	case corpo.BaralhoID != "" && !a.existeBaralho(r.Context(), corpo.BaralhoID):
@@ -680,7 +681,7 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		err := tx.QueryRowContext(ctx, `SELECT id, tipo FROM notas WHERE baralho_id = ? AND frente = ? LIMIT 1`, baralhoID, d.Frente).Scan(&existente, &tipo)
 		switch {
 		case err == nil:
-			if tiposDeNota[d.Tipo] < tiposDeNota[tipo] {
+			if tipoDePergunta(d.Tipo) && tiposDeNota[d.Tipo] < tiposDeNota[tipo] {
 				d.Tipo = tipo // atualizar não apaga o cartão do verso
 			}
 			_, err = tx.ExecContext(ctx, `UPDATE notas SET tipo = ?, verso = ?, tags = ?, imagem = ?, audio = ?,

@@ -12,7 +12,7 @@ test('cria o baralho, adiciona cartões e importa uma lista', async ({ page }) =
   await page.getByRole('button', { name: 'Criar baralho' }).click()
   await expect(page.getByRole('heading', { name: 'Inglês' })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Adicionar cartões' }).click()
+  await page.getByRole('link', { name: 'Adicionar', exact: true }).click()
   await page.getByRole('radio', { name: 'Nos dois sentidos' }).click()
   await page.getByLabel('Frente').fill('casa')
   await page.getByLabel('Verso').fill('house')
@@ -34,7 +34,7 @@ test('estuda pelo teclado e desfaz', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByLabel('4 novos, 0 aprendendo, 0 para revisar')).toBeVisible()
   await page.getByRole('link', { name: /Inglês/ }).first().click()
-  await page.getByRole('link', { name: 'Estudar agora' }).click()
+  await page.getByRole('link', { name: 'Estudar', exact: true }).click()
 
   await expect(page.locator('.frente')).toHaveText('casa')
   await expect(page.locator('.verso')).toHaveCount(0)
@@ -61,7 +61,7 @@ test('estuda pelo teclado e desfaz', async ({ page }) => {
     await page.keyboard.press('4')
   }
   await expect(page.getByText('Pronto por hoje.')).toBeVisible()
-  await expect(page.getByText('3 revisões neste baralho hoje.')).toBeVisible()
+  await expect(page.getByText('3 revisões hoje.')).toBeVisible()
 })
 
 test('busca, edita e suspende um cartão', async ({ page }) => {
@@ -132,7 +132,7 @@ test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await page.getByRole('button', { name: 'Criar baralho com 1 cartão' }).click()
 
   await expect(page.getByRole('heading', { name: 'Presidentes do Brasil no século 21' })).toBeVisible()
-  await page.getByRole('link', { name: 'Estudar agora' }).click()
+  await page.getByRole('link', { name: 'Estudar', exact: true }).click()
   await expect(page.locator('.frente')).toHaveText('Quem foi presidente do Brasil de 2003 a 2010?')
   await page.keyboard.press('Space')
   await expect(page.locator('.verso')).toHaveText('Lula (2003–2010)')
@@ -151,25 +151,46 @@ test('gera um baralho com a IA, revisa e aprova', async ({ page }) => {
   await expect(page.getByText('1 nota criada, 1 atualizada.')).toBeVisible()
 })
 
-test('estuda todos os baralhos misturados pelo botão do topo', async ({ page }) => {
+test('estuda um tema, com os baralhos dele misturados, e depois no aleatório', async ({ page }) => {
+  // Os dois baralhos entram no tema "Estudos".
+  for (const nome of ['Inglês', 'Presidentes do Brasil no século 21']) {
+    await page.goto('/')
+    await page.getByRole('link', { name: new RegExp(nome) }).first().click()
+    await page.getByPlaceholder('Sem tema').fill('Estudos')
+    await page.getByRole('button', { name: 'Salvar' }).click()
+    await expect(page.getByText('Opções salvas.')).toBeVisible()
+  }
   await page.goto('/')
-  await page.locator('.estudar-tudo').click()
+  await expect(page.getByRole('heading', { name: 'Estudos' })).toBeVisible()
+  await page.locator('.topo .estudar').click()
+  await expect(page.getByRole('heading', { name: 'Estudar' })).toBeVisible()
+  await expect(page.locator('.linha', { hasText: 'Estudos' })).toContainText('2 baralhos')
+
+  await page.locator('.linha', { hasText: 'Estudos' }).click()
   const baralhos = new Set()
   for (let i = 0; i < 12 && !(await page.getByText('Pronto por hoje.').isVisible()); i++) {
     await expect(page.locator('.frente')).toBeVisible()
-    await expect(page.locator('.modo')).toContainText('Todos')
-    baralhos.add((await page.locator('.barra .baralho').textContent()).replace('Todos · ', ''))
+    await expect(page.locator('.modo')).toContainText('Estudos')
+    baralhos.add((await page.locator('.barra .baralho').textContent()).replace('Estudos · ', ''))
     await page.keyboard.press('Space')
     await page.keyboard.press('4')
     await page.waitForTimeout(150)
   }
   await expect(page.getByText('Pronto por hoje.')).toBeVisible()
-  await expect(page.getByText(/revisões hoje, somando os baralhos/)).toBeVisible()
   expect([...baralhos].sort()).toEqual(['Inglês', 'Presidentes do Brasil no século 21'])
-  // Sem nada para hoje, o botão continua lá, só que discreto.
+
+  // Acabada a fila, o aleatório segue sorteando, sem nota e sem mexer no agendamento.
+  await page.getByRole('link', { name: 'Aleatório' }).click()
+  await expect(page.locator('.modo')).toContainText('Aleatório')
+  await expect(page.locator('.frente')).toBeVisible()
+  await page.keyboard.press('Space')
+  await expect(page.locator('.verso')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bom/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Próximo' }).click()
+  await expect(page.locator('.vistos')).toHaveText('1')
+
   await page.goto('/')
-  await expect(page.locator('.estudar-tudo')).toHaveText(/Estudar\s*0/)
-  await expect(page.locator('.estudar-tudo')).not.toHaveClass(/principal/)
+  await expect(page.locator('.topo .estudar')).not.toHaveClass(/principal/)
 })
 
 test('edita a instrução da IA e volta ao padrão', async ({ page }) => {
@@ -200,7 +221,7 @@ test('mostra o estudo na TV, respondendo pelo celular', async ({ page, context }
   await page.goto('/#/novo-baralho')
   await page.getByLabel('Nome do novo baralho').fill('Capitais')
   await page.getByRole('button', { name: 'Criar baralho' }).click()
-  await page.getByRole('link', { name: 'Adicionar cartões' }).click()
+  await page.getByRole('link', { name: 'Adicionar', exact: true }).click()
   await page.getByLabel('Frente').fill('França')
   await page.getByLabel('Verso').fill('Paris')
   await page.getByRole('main').getByRole('button', { name: 'Adicionar' }).click()
@@ -212,7 +233,7 @@ test('mostra o estudo na TV, respondendo pelo celular', async ({ page, context }
 
   await page.goto('/#/baralhos')
   await page.getByRole('link', { name: /Capitais/ }).click()
-  await page.getByRole('link', { name: 'Estudar agora' }).click()
+  await page.getByRole('link', { name: 'Estudar', exact: true }).click()
   await expect(page.locator('.frente')).toHaveText('França')
   await page.getByRole('button', { name: 'Mostrar na TV' }).click()
   await expect(page.getByRole('button', { name: 'Parar de mostrar na TV' })).toHaveAttribute('aria-pressed', 'true')
@@ -228,4 +249,24 @@ test('mostra o estudo na TV, respondendo pelo celular', async ({ page, context }
   // A escolha fica guardada; ao sair do estudo, a TV volta a esperar.
   await page.goto('/#/baralhos')
   await expect(tv.getByText('No celular, abra um baralho')).toBeVisible()
+})
+
+test('um cartão de leitura mostra o verso como texto para ler', async ({ page }) => {
+  await page.goto('/#/novo-baralho')
+  await page.getByLabel('Nome do novo baralho').fill('Curiosidades')
+  await page.getByRole('button', { name: 'Criar baralho' }).click()
+  await page.getByRole('link', { name: 'Adicionar', exact: true }).click()
+  await page.getByRole('radio', { name: 'Leitura' }).click()
+  await page.getByLabel('Frente').fill('Qual a origem do nome Ray-Ban?')
+  await page.getByLabel('Verso').fill('Em 1937, a Bausch & Lomb lançou óculos para pilotos.\n\nO nome vem de banir (ban) os raios (rays) do sol.')
+  await page.getByRole('main').getByRole('button', { name: 'Adicionar' }).click()
+  await expect(page.getByText('Cartão adicionado.')).toBeVisible()
+
+  await page.goto('/#/baralhos')
+  await page.getByRole('link', { name: /Curiosidades/ }).click()
+  await page.getByRole('link', { name: 'Estudar', exact: true }).click()
+  await expect(page.locator('.face.leitura .frente')).toHaveText('Qual a origem do nome Ray-Ban?')
+  await page.keyboard.press('Space')
+  await expect(page.locator('.face.leitura .verso')).toContainText('banir (ban)')
+  await expect(page.locator('.face.leitura .verso')).toHaveCSS('text-align', 'left')
 })

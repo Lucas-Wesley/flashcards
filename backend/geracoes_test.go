@@ -445,6 +445,15 @@ func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 		}
 		return g
 	}
+	// De leitura (F38): outra instrução, e no máximo 4 cartões, seja qual for o tamanho do texto.
+	l := pedir(map[string]any{"baralho": "História", "tipo": "leitura"})
+	if l.Tipo != "leitura" || l.Quantidade != cartoesDeLeitura {
+		t.Fatalf("pedido de leitura: %+v", l)
+	}
+	if l = e.esperarGeracao(l.ID, emRevisao); !strings.Contains(l.Proposta.Observacoes, "Seguiu a instrução de leitura.") || strings.Contains(l.Proposta.Observacoes, "instrução do texto") {
+		t.Fatalf("instrução de leitura: %q", l.Proposta.Observacoes)
+	}
+
 	g := pedir(map[string]any{"baralho": "História"})
 	if g.Origem != origemAcervo || g.Quantidade != 22 || g.Link == "" || g.BaralhoID != "" {
 		t.Fatalf("pedido: %+v", g)

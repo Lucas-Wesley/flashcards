@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-const colunasBaralho = `id, nome, novos_por_dia, revisoes_por_dia, retencao, criado_em, atualizado_em`
+const colunasBaralho = `id, nome, tema, novos_por_dia, revisoes_por_dia, retencao, criado_em, atualizado_em`
 
 func lerBaralho(l linha) (baralho, error) {
 	var b baralho
-	err := l.Scan(&b.ID, &b.Nome, &b.NovosPorDia, &b.RevisoesPorDia, &b.Retencao, &b.CriadoEm, &b.AtualizadoEm)
+	err := l.Scan(&b.ID, &b.Nome, &b.Tema, &b.NovosPorDia, &b.RevisoesPorDia, &b.Retencao, &b.CriadoEm, &b.AtualizadoEm)
 	return b, err
 }
 
@@ -100,6 +100,7 @@ func (a *app) handleBaralho(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleCriarBaralho(w http.ResponseWriter, r *http.Request) {
 	var corpo struct {
 		Nome string `json:"nome"`
+		Tema string `json:"tema"`
 	}
 	if !lerCorpo(w, r, &corpo) {
 		return
@@ -110,8 +111,8 @@ func (a *app) handleCriarBaralho(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := novoID()
-	if _, err := a.db.ExecContext(r.Context(), `INSERT INTO baralhos (id, nome, criado_em, atualizado_em) VALUES (?, ?, ?, ?)`,
-		id, nome, a.agora(), a.agora()); err != nil {
+	if _, err := a.db.ExecContext(r.Context(), `INSERT INTO baralhos (id, nome, tema, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?)`,
+		id, nome, strings.TrimSpace(corpo.Tema), a.agora(), a.agora()); err != nil {
 		falha(w, err)
 		return
 	}
@@ -131,6 +132,7 @@ func (a *app) handleMudarBaralho(w http.ResponseWriter, r *http.Request) {
 	}
 	var corpo struct {
 		Nome           *string  `json:"nome"`
+		Tema           *string  `json:"tema"`
 		NovosPorDia    *int     `json:"novos_por_dia"`
 		RevisoesPorDia *int     `json:"revisoes_por_dia"`
 		Retencao       *float64 `json:"retencao"`
@@ -140,6 +142,9 @@ func (a *app) handleMudarBaralho(w http.ResponseWriter, r *http.Request) {
 	}
 	if corpo.Nome != nil {
 		b.Nome = strings.TrimSpace(*corpo.Nome)
+	}
+	if corpo.Tema != nil {
+		b.Tema = strings.TrimSpace(*corpo.Tema)
 	}
 	if corpo.NovosPorDia != nil {
 		b.NovosPorDia = *corpo.NovosPorDia
@@ -162,8 +167,8 @@ func (a *app) handleMudarBaralho(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "A retenção desejada vai de 70% a 99%.")
 		return
 	}
-	if _, err := a.db.ExecContext(r.Context(), `UPDATE baralhos SET nome = ?, novos_por_dia = ?, revisoes_por_dia = ?, retencao = ?, atualizado_em = ?
-		WHERE id = ?`, b.Nome, b.NovosPorDia, b.RevisoesPorDia, b.Retencao, a.agora(), b.ID); err != nil {
+	if _, err := a.db.ExecContext(r.Context(), `UPDATE baralhos SET nome = ?, tema = ?, novos_por_dia = ?, revisoes_por_dia = ?, retencao = ?, atualizado_em = ?
+		WHERE id = ?`, b.Nome, b.Tema, b.NovosPorDia, b.RevisoesPorDia, b.Retencao, a.agora(), b.ID); err != nil {
 		falha(w, err)
 		return
 	}

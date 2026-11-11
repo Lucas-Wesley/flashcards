@@ -84,8 +84,10 @@ const (
 )
 
 type baralho struct {
-	ID             string  `json:"id"`
-	Nome           string  `json:"nome"`
+	ID   string `json:"id"`
+	Nome string `json:"nome"`
+	// Tema (F38): o assunto que junta baralhos (Inglês: phrasal verbs, pronúncia…); vazio = sem tema.
+	Tema           string  `json:"tema"`
 	NovosPorDia    int     `json:"novos_por_dia"`
 	RevisoesPorDia int     `json:"revisoes_por_dia"`
 	Retencao       float64 `json:"retencao"`

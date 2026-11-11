@@ -200,7 +200,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
         }}</span>
-        <template v-if="doAcervo">até {{ g.quantidade }} · </template><template v-else-if="!doLink">cerca de {{ g.quantidade }} · </template>{{ g.tipo === 'invertido' ? 'nos dois sentidos' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
+        <template v-if="doAcervo">até {{ g.quantidade }} · </template><template v-else-if="!doLink">cerca de {{ g.quantidade }} · </template>{{ g.tipo === 'invertido' ? 'nos dois sentidos' : g.tipo === 'leitura' ? 'de leitura' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
       </p>
 
       <template v-if="trabalhando">
@@ -265,7 +265,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
               <span v-if="c.atualiza" class="chip atualiza">Atualiza o cartão que já existe</span>
               <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : 'Texto no Acervo') }}</a>
               <textarea v-model="c.frente" class="campo texto-cartao" rows="2" :aria-label="`Frente do cartão ${i + 1}`" />
-              <textarea v-model="c.verso" class="campo texto-cartao" rows="2" :aria-label="`Verso do cartão ${i + 1}`" />
+              <textarea v-model="c.verso" class="campo texto-cartao" :rows="g.tipo === 'leitura' ? 10 : 2" :aria-label="`Verso do cartão ${i + 1}`" />
               <input v-model="c.tags" class="campo tags" placeholder="tags" :aria-label="`Tags do cartão ${i + 1}`" />
               <div v-if="c.audio_url" class="audio">
                 <audio controls preload="none" :src="c.audio_url" :aria-label="`Áudio do cartão ${i + 1}`" />

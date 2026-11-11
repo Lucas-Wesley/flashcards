@@ -31,6 +31,14 @@ defineProps({ nome: { type: String, required: true } })
       <rect x="3" y="4.5" width="18" height="12.5" rx="2" />
       <path d="M8.5 20.5h7M12 17v3.5" />
     </template>
+    <template v-else-if="nome === 'info'">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5M12 8h.01" />
+    </template>
+    <template v-else-if="nome === 'aleatorio'">
+      <path d="M4 7h3.5c2 0 3.2 1.2 4.5 3.2l1 1.6c1.3 2 2.5 3.2 4.5 3.2H20M17 12.5l3 2.5-3 2.5" />
+      <path d="M4 17h3.5c1.3 0 2.3-.5 3.1-1.4M13.4 8.4c.8-.9 1.8-1.4 3.1-1.4H20M17 4.5L20 7l-3 2.5" />
+    </template>
     <template v-else-if="nome === 'pesquisar'">
       <circle cx="11" cy="11" r="6.5" />
       <path d="M16 16l4.5 4.5" />

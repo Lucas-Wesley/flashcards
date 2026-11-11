@@ -1,5 +1,7 @@
 <script setup>
 import { computed, inject, onMounted, ref } from 'vue'
+import Icone from './Icone.vue'
+import Info from './Info.vue'
 import { api } from './api.js'
 
 // A página de um baralho: o que há para hoje, o botão de estudar e as opções.
@@ -8,7 +10,8 @@ const recado = inject('recado')
 
 const b = ref(null)
 const erro = ref('')
-const opcoes = ref({ nome: '', novos: 20, revisoes: 200, retencao: 90 })
+const opcoes = ref({ nome: '', tema: '', novos: 20, revisoes: 200, retencao: 90 })
+const temas = ref([]) // os temas que já existem, para sugerir
 const salvando = ref(false)
 // Os pedidos à IA que criaram ou alimentaram este baralho: dá para abrir, editar o pedido e refazer.
 const pedidos = ref([])
@@ -17,7 +20,7 @@ const paraHoje = computed(() => (b.value ? b.value.contagem.novos + b.value.cont
 
 function preencher(dados) {
   b.value = dados
-  opcoes.value = { nome: dados.nome, novos: dados.novos_por_dia, revisoes: dados.revisoes_por_dia, retencao: Math.round(dados.retencao * 100) }
+  opcoes.value = { nome: dados.nome, tema: dados.tema, novos: dados.novos_por_dia, revisoes: dados.revisoes_por_dia, retencao: Math.round(dados.retencao * 100) }
 }
 
 async function carregar() {
@@ -36,6 +39,7 @@ async function salvar() {
         metodo: 'PATCH',
         corpo: {
           nome: opcoes.value.nome,
+          tema: opcoes.value.tema,
           novos_por_dia: Number(opcoes.value.novos),
           revisoes_por_dia: Number(opcoes.value.revisoes),
           retencao: Number(opcoes.value.retencao) / 100,
@@ -64,6 +68,9 @@ async function apagar() {
 
 onMounted(async () => {
   carregar()
+  api('/api/baralhos')
+    .then((lista) => (temas.value = [...new Set(lista.map((x) => x.tema).filter(Boolean))].sort()))
+    .catch(() => {})
   try {
     pedidos.value = await api(`/api/geracoes?baralho=${props.id}`)
   } catch {
@@ -78,6 +85,7 @@ onMounted(async () => {
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="b">
+      <p v-if="b.tema" class="tema">{{ b.tema }}</p>
       <h1 class="titulo">{{ b.nome }}</h1>
 
       <div class="hoje">
@@ -96,18 +104,15 @@ onMounted(async () => {
       </div>
 
       <div class="linha-acoes principal-acoes">
-        <a v-if="paraHoje" class="botao principal" :href="`#/estudar/${b.id}`">Estudar agora</a>
-        <span v-else class="suave pronto">{{ b.cartoes ? 'Tudo em dia por hoje.' : 'Baralho vazio: adicione cartões para começar.' }}</span>
+        <a class="botao" :class="{ principal: paraHoje }" :href="`#/estudar/${b.id}`">Estudar</a>
+        <a v-if="b.cartoes" class="botao" :href="`#/aleatorio/${b.id}`"><Icone nome="aleatorio" /> Aleatório</a>
       </div>
       <div class="linha-acoes">
-        <a class="botao" :href="`#/adicionar/${b.id}`">Adicionar cartões</a>
+        <a class="botao" :href="`#/adicionar/${b.id}`">Adicionar</a>
         <a class="botao" :href="`#/gerar/${b.id}`">Gerar com IA</a>
         <a class="botao" :href="`#/importar/${b.id}`">Importar</a>
-        <a v-if="b.cartoes" class="botao" :href="`#/cartoes/${b.id}`">Ver os {{ b.cartoes }} cartões</a>
+        <a v-if="b.cartoes" class="botao" :href="`#/cartoes/${b.id}`">{{ b.cartoes }} {{ b.cartoes === 1 ? 'cartão' : 'cartões' }}</a>
       </div>
-      <p class="meta">
-        {{ b.feitos_hoje }} {{ b.feitos_hoje === 1 ? 'revisão' : 'revisões' }} hoje<template v-if="b.suspensos"> · {{ b.suspensos }} {{ b.suspensos === 1 ? 'suspenso' : 'suspensos' }}</template>
-      </p>
 
       <template v-if="pedidos.length">
         <p class="rotulo">Pedidos à IA</p>
@@ -120,10 +125,19 @@ onMounted(async () => {
 
       <p class="rotulo">Opções</p>
       <form class="opcoes" @submit.prevent="salvar">
-        <label>
-          <span class="rotulo-campo">Nome</span>
-          <input v-model="opcoes.nome" class="campo" />
-        </label>
+        <div class="dupla">
+          <label>
+            <span class="rotulo-campo">Nome</span>
+            <input v-model="opcoes.nome" class="campo" />
+          </label>
+          <label>
+            <span class="rotulo-campo">Tema <Info>O assunto que junta baralhos, como “Inglês” para phrasal verbs, pronúncia e verbos irregulares. No Estudar, o tema mistura os cartões de todos os baralhos dele.</Info></span>
+            <input v-model="opcoes.tema" class="campo" list="temas-existentes" placeholder="Sem tema" />
+            <datalist id="temas-existentes">
+              <option v-for="t in temas" :key="t" :value="t" />
+            </datalist>
+          </label>
+        </div>
         <div class="dupla">
           <label>
             <span class="rotulo-campo">Novos por dia</span>
@@ -135,15 +149,14 @@ onMounted(async () => {
           </label>
         </div>
         <label>
-          <span class="rotulo-campo">Retenção desejada (%)</span>
+          <span class="rotulo-campo"
+            >Retenção desejada (%)
+            <Info>A chance de lembrar o cartão no dia da revisão. Com 90%, o padrão, você acerta 9 de cada 10. Mais alta pede revisões mais frequentes; mais baixa, menos revisões e mais esquecimento.</Info></span
+          >
           <input v-model="opcoes.retencao" class="campo curto" type="number" min="70" max="99" />
-          <span class="ajuda">
-            A chance de lembrar o cartão no dia da revisão. Com 90%, o padrão, você acerta 9 de cada 10 revisões. Mais alta pede revisões
-            mais frequentes; mais baixa, menos revisões e mais esquecimento.
-          </span>
         </label>
         <div class="linha-acoes">
-          <button class="botao" :disabled="salvando">{{ salvando ? 'Salvando…' : 'Salvar opções' }}</button>
+          <button class="botao" :disabled="salvando">{{ salvando ? 'Salvando…' : 'Salvar' }}</button>
           <button type="button" class="botao perigo" @click="apagar">Apagar baralho</button>
         </div>
       </form>
@@ -181,6 +194,15 @@ onMounted(async () => {
 
 .voltar:hover {
   color: var(--azul);
+}
+
+.tema {
+  margin: 0 0 2px;
+  color: var(--texto-suave);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .titulo {
@@ -228,15 +250,7 @@ onMounted(async () => {
   padding: 0 22px;
 }
 
-.pronto {
-  font-size: 0.92rem;
-}
 
-.meta {
-  margin: 14px 0 0;
-  color: var(--texto-fraco);
-  font-size: 0.8rem;
-}
 
 .opcoes {
   display: grid;
@@ -255,6 +269,10 @@ onMounted(async () => {
 }
 
 .rotulo-campo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  gap: 2px;
   color: var(--texto-suave);
   font-size: 0.82rem;
   font-weight: 500;
@@ -264,11 +282,6 @@ onMounted(async () => {
   max-width: 120px;
 }
 
-.ajuda {
-  color: var(--texto-fraco);
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
 
 .aviso {
   margin-bottom: 16px;
