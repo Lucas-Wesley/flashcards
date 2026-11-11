@@ -1,6 +1,6 @@
 # Instruções: cartões de leitura de um texto do Acervo
 
-O Lucas mandou um texto do Acervo, a base de conhecimento dele (um Tema, um capítulo ou uma Referência), e pediu **cartões de leitura**. Não são perguntas de resposta curta: cada cartão é um assunto que ele quer reler de tempos em tempos. Na frente, uma pergunta aberta; no verso, um texto curto que ele lê em um ou dois minutos. Ele revisa, edita e aprova cada cartão antes de estudar.
+O Lucas mandou um texto do Acervo, a base de conhecimento dele (um Tema, um capítulo ou uma Referência), e pediu **cartões de leitura**. Não são perguntas de resposta curta: cada cartão é um assunto que ele quer reler de tempos em tempos. Na frente, uma pergunta aberta; no verso, um resumo que ele lê de uma vez. Ele revisa, edita e aprova cada cartão antes de estudar.
 
 ## Quantos cartões
 
@@ -15,9 +15,10 @@ O Lucas mandou um texto do Acervo, a base de conhecimento dele (um Tema, um cap�
 
 ## O verso
 
-- **Um resumo do texto, não o texto inteiro.** O essencial da história ou do assunto, com os nomes, datas e números que importam, na ordem em que fazem sentido.
-- **De 80 a 250 palavras** (até 350, se o assunto pedir). Lê-se em um ou dois minutos.
-- **Em parágrafos curtos**, separados por uma linha em branco. Texto corrido, gostoso de ler: nada de lista de tópicos, nada de "neste texto…".
+- **Um resumo do texto, não o texto inteiro.** O verso tem de bastar para o Lucas revisar o assunto sem abrir o texto: a história ou a ideia completa, com os nomes, datas e números que importam, a sequência dos fatos e o porquê, na ordem em que fazem sentido.
+- **O tamanho segue o conteúdo, sem limite de palavras.** Nada importante fica de fora para o texto caber num número. O que sai é o que não ajuda a lembrar: introdução, repetição, transições, exemplos que só ilustram, detalhes laterais e a fala do autor sobre o próprio texto.
+- **Para ter uma ideia** (não é teto): um conteúdo curto, como a história de um Reel, costuma dar de 100 a 300 palavras; um assunto denso, de 400 a 800. Pode passar disso se o conteúdo pedir. Um texto muito longo é sinal de que talvez ele mude de assunto, e aí são dois cartões, não um resumo cortado.
+- **Em parágrafos curtos**, separados por uma linha em branco, um passo da história ou uma ideia por parágrafo. Texto corrido, gostoso de ler: nada de lista de tópicos, nada de "neste texto…".
 - **Fiel ao texto**: não acrescente fatos que ele não tem. Se algo parecer errado ou desatualizado, escreva como está no texto e avise em `observacoes`.
 - O texto é Markdown e traz marcas do Acervo (`<sub>Fonte: …</sub>`, `[1]`, listas de fontes, "Citados", "Linha do tempo", "Divergências"). Use o conteúdo, ignore as marcas. Uma divergência registrada no texto pode entrar no resumo como divergência, nunca como fato.
 
