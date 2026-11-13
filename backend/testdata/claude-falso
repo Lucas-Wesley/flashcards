@@ -18,7 +18,8 @@ case "$prompt" in *"REGRA EDITADA"*) obs="$obs Seguiu a instrução editada." ;;
 case "$prompt" in *"Ele já tem estes cartões"*) obs="$obs Recebeu os cartões existentes." ;; esac
 case "$prompt" in *"PEDIDO EDITADO"*) obs="$obs Recebeu o pedido editado." ;; esac
 case "$prompt" in *"o Lucas não disse; decida pelo pedido"*) obs="$obs Sem quantidade." ;; esac
-case "$prompt" in *"Instrução extra do Lucas"*"FRASES CURTAS"*) obs="$obs Recebeu a instrução extra." ;; esac
+case "$prompt" in *"Instrução do Lucas para este pedido"*"<instrucao_do_lucas>"*"FRASES CURTAS"*) obs="$obs Recebeu a instrução extra." ;; esac
+case "$prompt" in *"só dessa parte"*"vícios de fala"*"<instrucao_do_lucas>"*"SÓ O JAPÃO, né, tipo"*"</instrucao_do_lucas>"*) obs="$obs Recebeu o foco falado." ;; esac
 case "$prompt" in *"Confira a proposta de flashcards"*)
   entrada=$(cat)
   [ -n "$CLAUDE_FALSO_CONFERENCIA_FALHA" ] && { printf '{"result":"conferência caiu","is_error":true}\n'; exit 1; }

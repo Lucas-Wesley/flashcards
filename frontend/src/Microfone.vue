@@ -4,6 +4,7 @@ import Icone from './Icone.vue'
 
 // Falar em vez de escrever (F39): grava no aparelho e o servidor transcreve com o Whisper do Mac
 // mini. O texto volta para o campo, onde dá para conferir e corrigir antes de mandar à IA.
+const props = defineProps({ contexto: { type: String, default: '' } }) // o assunto, para o Whisper acertar os nomes (F43)
 const emit = defineEmits(['texto'])
 const recado = inject('recado')
 
@@ -45,6 +46,7 @@ async function transcrever(audio) {
   estado.value = 'transcrevendo'
   const corpo = new FormData()
   corpo.append('audio', audio, audio.type.includes('mp4') ? 'fala.mp4' : 'fala.webm')
+  if (props.contexto) corpo.append('contexto', props.contexto)
   try {
     const resposta = await fetch('/api/transcrever', { method: 'POST', body: corpo, signal: AbortSignal.timeout(300000) })
     const r = await resposta.json().catch(() => ({}))

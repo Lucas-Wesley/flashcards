@@ -50,11 +50,14 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 		Secoes    []secaoDoTexto `json:"secoes"`
 		Tipo      string         `json:"tipo"`
 		Origem    string         `json:"origem"` // "acervo" (o padrão) ou "biblioteca"
+		// Instrucao (F43): o foco e o jeito dos cartões que o Lucas escreveu ou falou ao pedir.
+		Instrucao string `json:"instrucao"`
 	}
 	if !lerCorpo(w, r, &corpo) {
 		return
 	}
 	corpo.Titulo, corpo.Baralho, corpo.Texto = strings.TrimSpace(corpo.Titulo), strings.TrimSpace(corpo.Baralho), strings.TrimSpace(corpo.Texto)
+	corpo.Instrucao = strings.TrimSpace(corpo.Instrucao)
 	if corpo.Tipo == "" {
 		corpo.Tipo = "basico"
 	}
@@ -86,6 +89,9 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 	case !marcacao && tamanho < 200:
 		erroJSON(w, http.StatusBadRequest, "O texto é curto demais para virar cartões.")
 		return
+	case utf8.RuneCountInString(corpo.Instrucao) > maximoDaInstrucao:
+		erroJSON(w, http.StatusBadRequest, fmt.Sprintf("A instrução vai até %d caracteres.", maximoDaInstrucao))
+		return
 	case tamanho > tamanhoMaximoDoTexto:
 		erroJSON(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("O texto tem %d mil caracteres; o máximo é %d mil. Gere por capítulo.", tamanho/1000, tamanhoMaximoDoTexto/1000))
 		return
@@ -115,9 +121,9 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 		link = ""
 	}
 
-	res, err := a.db.ExecContext(r.Context(), `INSERT INTO geracoes (origem, pedido, texto, contexto, link, nome_sugerido, secoes, quantidade, tipo, baralho_id, estado, criado_em)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		corpo.Origem, corpo.Titulo, corpo.Texto, strings.TrimSpace(corpo.Contexto), link, corpo.Baralho, string(jsonSecoes),
+	res, err := a.db.ExecContext(r.Context(), `INSERT INTO geracoes (origem, pedido, instrucao, texto, contexto, link, nome_sugerido, secoes, quantidade, tipo, baralho_id, estado, criado_em)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		corpo.Origem, corpo.Titulo, corpo.Instrucao, corpo.Texto, strings.TrimSpace(corpo.Contexto), link, corpo.Baralho, string(jsonSecoes),
 		quantidade, corpo.Tipo, corpo.BaralhoID, naFila, a.agora())
 	if err != nil {
 		falha(w, err)

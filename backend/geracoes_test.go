@@ -465,6 +465,20 @@ func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 		!strings.Contains(obs, "Ferramentas: ;") || !strings.Contains(obs, "WebSearch,WebFetch.") {
 		t.Fatalf("observações: %q", obs)
 	}
+	if strings.Contains(obs, "Recebeu o foco falado.") {
+		t.Fatalf("sem instrução, sem foco: %q", obs)
+	}
+	// O foco e o jeito dos cartões (F43), escrito ou falado: vai no fim do pedido, avisando que pode ser fala.
+	f := pedir(map[string]any{"baralho": "História", "instrucao": "  SÓ O JAPÃO, né, tipo… só a parte do Japão  "})
+	if f.Instrucao != "SÓ O JAPÃO, né, tipo… só a parte do Japão" {
+		t.Fatalf("instrução guardada: %q", f.Instrucao)
+	}
+	if f = e.esperarGeracao(f.ID, emRevisao); !strings.Contains(f.Proposta.Observacoes, "Recebeu o foco falado.") {
+		t.Fatalf("foco: %q", f.Proposta.Observacoes)
+	}
+	if s := e.pedir("POST", "/api/textos", map[string]any{"titulo": "x", "texto": texto, "baralho": "H", "instrucao": strings.Repeat("a", maximoDaInstrucao+1)}, nil); s != http.StatusBadRequest {
+		t.Errorf("instrução longa demais: %d", s)
+	}
 	// O baralho novo tem o nome que o Lucas deu, seja qual for o que a IA sugeriu.
 	if g.Proposta.NomeBaralho != "História" {
 		t.Fatalf("nome: %q", g.Proposta.NomeBaralho)

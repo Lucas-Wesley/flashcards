@@ -274,13 +274,13 @@ onBeforeUnmount(() => clearTimeout(relogio))
             v-model="instrucao"
             class="campo"
             rows="3"
-            maxlength="1000"
+            maxlength="3000"
             aria-label="O que mudar ou acrescentar"
             :placeholder="doLink ? 'Ex.: prefira o sentido de desistir; frases mais curtas' : 'Ex.: mais cartões sobre as datas; deixe os nomes de fora'"
             @keydown.ctrl.enter="pedirMais"
             @keydown.meta.enter="pedirMais"
           />
-          <Microfone class="falar" @texto="ouvidoMais" />
+          <Microfone class="falar" :contexto="g.pedido" @texto="ouvidoMais" />
         </div>
         <label class="quantos">
           <span class="rotulo-campo">{{ doLink ? 'Quantas frases' : 'No máximo quantos cartões' }}</span>

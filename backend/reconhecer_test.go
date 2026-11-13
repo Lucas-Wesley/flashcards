@@ -126,7 +126,7 @@ func TestTranscreverOPedidoFalado(t *testing.T) {
 		t.Errorf("sem Whisper configurado: %d", s)
 	}
 
-	var recebeu []string
+	var recebeu, prompts []string
 	whisper := func(quem string) *httptest.Server {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/saude" {
@@ -140,6 +140,7 @@ func TestTranscreverOPedidoFalado(t *testing.T) {
 			}
 			dados, _ := io.ReadAll(arquivo)
 			recebeu = append(recebeu, quem+":"+r.FormValue("model")+":"+r.FormValue("language")+":"+string(dados))
+			prompts = append(prompts, r.FormValue("prompt"))
 			w.Write([]byte(`{"text":"  Quero as bandeiras dos países.  "}`))
 		}))
 		t.Cleanup(srv.Close)
@@ -158,17 +159,28 @@ func TestTranscreverOPedidoFalado(t *testing.T) {
 		t.Fatalf("o Mac devia transcrever: %v", recebeu)
 	}
 
+	if prompts[0] != contextoDaFala {
+		t.Fatalf("prompt sem assunto: %q", prompts[0])
+	}
+	// O assunto (F43) ajuda o Whisper com os nomes.
+	if s := e.enviarFalaEm([]byte("OPUS"), &r, "Restauração  Meiji\n e o xogunato"); s != http.StatusOK || prompts[1] != contextoDaFala+" Assunto: Restauração Meiji e o xogunato" {
+		t.Fatalf("prompt com assunto: %d %q", s, prompts)
+	}
+
 	mac.Close() // o Mac desligado
-	if s := e.enviarFalaEm([]byte("OPUS"), &r); s != http.StatusOK || len(recebeu) != 2 || recebeu[1] != "reserva:"+modeloDaReserva+":pt:OPUS" {
+	if s := e.enviarFalaEm([]byte("OPUS"), &r); s != http.StatusOK || len(recebeu) != 3 || recebeu[2] != "reserva:"+modeloDaReserva+":pt:OPUS" {
 		t.Fatalf("a reserva devia transcrever: %d %v", s, recebeu)
 	}
 }
 
 func (e *ambiente) enviarFala(audio []byte) int { return e.enviarFalaEm(audio, nil) }
 
-func (e *ambiente) enviarFalaEm(audio []byte, destino any) int {
+func (e *ambiente) enviarFalaEm(audio []byte, destino any, contexto ...string) int {
 	var corpo bytes.Buffer
 	mw := multipart.NewWriter(&corpo)
+	for _, c := range contexto {
+		mw.WriteField("contexto", c)
+	}
 	parte, _ := mw.CreateFormFile("audio", "fala.webm")
 	parte.Write(audio)
 	mw.Close()

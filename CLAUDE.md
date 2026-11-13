@@ -3,7 +3,7 @@
 App do **ecossistema de apps pessoais do Lucas**: flashcards com repetição espaçada, no estilo do
 Anki, simplificado. É o **3º app** (depois da Biblioteca Digital e do Acervo; ver ROADMAP do Hub).
 
-**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F42) e próximos passos.
+**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F43) e próximos passos.
 
 ## Em uma frase
 Baralhos (agrupados por tema) → notas (frente e verso, nos dois sentidos ou de leitura) → cartões agendados pelo **FSRS-6**

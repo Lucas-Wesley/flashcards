@@ -39,8 +39,8 @@ const tempoMaximoDaGeracao = 30 * time.Minute
 // grande, como os países do mundo.
 const maximoDeCartoes = 300
 
-// maximoDaInstrucao (F42): a instrução extra de um link ou de um texto é curta, não um pedido novo.
-const maximoDaInstrucao = 1000
+// maximoDaInstrucao (F42, F43): a instrução extra é curta, não um pedido novo; falada, cabe uns 3 min de fala.
+const maximoDaInstrucao = 3000
 
 type geracao struct {
 	ID     int64  `json:"id"`
@@ -289,13 +289,29 @@ func textoDaQuantidade(n int) string {
 		"conjunto completo (todos os estados, todos os países), cubra o conjunto inteiro e diga em observacoes que passou do número.", n)
 }
 
-// textoDaInstrucao (F42): a instrução extra do Lucas, quando houver, no fim do pedido à IA.
+// textoDaInstrucao (F42, F43): a instrução do Lucas, quando houver, no fim do pedido à IA. Muitas vezes
+// ela é falada: a IA é avisada de que o texto pode ter vícios de fala e erros do reconhecimento de voz.
 func (g *geracao) textoDaInstrucao() string {
-	if strings.TrimSpace(g.Instrucao) == "" {
+	instrucao := strings.TrimSpace(g.Instrucao)
+	if instrucao == "" {
 		return ""
 	}
-	return fmt.Sprintf("\n\nInstrução extra do Lucas para este pedido (vale mais que os critérios padrão das instruções, "+
-		"sem quebrar as regras de fonte delas): %q", strings.TrimSpace(g.Instrucao))
+	foco := ""
+	if g.doTexto() {
+		foco = " Se ela diz em que parte do texto focar, os cartões saem só dessa parte, e o resto do texto fica de fora " +
+			"(mesmo o que seria bom cartão); o teto de cartões continua teto. Se ela diz como quer os cartões, siga essa forma."
+	}
+	entendimento := ""
+	if g.Origem != "link" {
+		entendimento = " Em `entendimento`, diga ao Lucas, em uma ou duas frases limpas, o que você entendeu dela: " +
+			"o foco e a forma dos cartões. É por ali que ele confere se a fala foi bem entendida."
+	}
+	return "\n\nInstrução do Lucas para este pedido, entre <instrucao_do_lucas> e </instrucao_do_lucas>. Ela vale mais que " +
+		"os critérios padrão das instruções (o que vira cartão, quantos, a forma da frente e do verso), sem quebrar as " +
+		"regras de fonte delas." + foco + " Muitas vezes ela é falada e transcrita pelo reconhecimento de voz: pode ter " +
+		"vícios de fala, repetições, frases soltas, correções no meio (\"não, melhor…\": vale a última) e palavras trocadas " +
+		"pela transcrição (um nome do texto que soou parecido). Entenda a intenção, não a letra." + entendimento +
+		"\n\n<instrucao_do_lucas>\n" + instrucao + "\n</instrucao_do_lucas>"
 }
 
 func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {

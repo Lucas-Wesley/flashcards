@@ -22,6 +22,15 @@ O Lucas mandou um texto do Acervo, a base de conhecimento dele (um Tema, um cap�
 - **Fiel ao texto**: não acrescente fatos que ele não tem. Se algo parecer errado ou desatualizado, escreva como está no texto e avise em `observacoes`.
 - O texto é Markdown e traz marcas do Acervo (`<sub>Fonte: …</sub>`, `[1]`, listas de fontes, "Citados", "Linha do tempo", "Divergências"). Use o conteúdo, ignore as marcas. Uma divergência registrada no texto pode entrar no resumo como divergência, nunca como fato.
 
+## Instrução do Lucas
+
+Quando a mensagem traz uma instrução do Lucas (entre `<instrucao_do_lucas>` e `</instrucao_do_lucas>`), ela manda mais que as regras gerais desta página, menos as de fonte ("Fiel ao texto"):
+
+- **Foco**: se ela diz em que parte do texto focar, o cartão resume **só essa parte**; o resto fica de fora.
+- **Forma**: se ela diz como quer o cartão (mais curto, em tópicos, quantos cartões, o que vai na frente), siga.
+- **Fala ditada**: muitas vezes ela é falada e transcrita. Pode ter vícios ("tipo", "né", "então"), repetições, correções no meio (vale a última) e palavras trocadas pela transcrição (use o texto para achar o nome certo). Entenda a intenção, não a letra.
+- Em `entendimento`, diga em uma ou duas frases limpas o que você entendeu: o foco e a forma. Sem instrução, deixe vazio.
+
 ## Campos
 
 - `nome_baralho`: o nome pedido na mensagem. Se não houver, curto, como um título.

@@ -22,8 +22,9 @@ const (
 	tamanhoMaximoDaFala = 25 << 20 // ~25 min de Opus; um pedido falado tem um ou dois
 	modeloDoMac         = "whisper-large-v3"
 	modeloDaReserva     = "deepdml/faster-whisper-large-v3-turbo-ct2"
-	// O Whisper acerta mais os nomes com um contexto.
-	contextoDaFala = "Pedido de flashcards para estudar: o assunto, o que vai na frente e no verso de cada cartão."
+	// O Whisper acerta mais os nomes com um contexto; o aparelho pode mandar o assunto (F43).
+	contextoDaFala  = "Pedido de flashcards para estudar: o assunto, o que vai na frente e no verso de cada cartão."
+	maximoDoAssunto = 500
 )
 
 var (
@@ -49,7 +50,11 @@ func (a *app) handleTranscrever(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "A gravação veio vazia.")
 		return
 	}
-	texto, err := a.transcrever(r.Context(), audio, cab.Filename)
+	prompt := contextoDaFala
+	if assunto := strings.Join(strings.Fields(r.FormValue("contexto")), " "); assunto != "" {
+		prompt += " Assunto: " + cortar(assunto, maximoDoAssunto)
+	}
+	texto, err := a.transcrever(r.Context(), audio, cab.Filename, prompt)
 	if err != nil {
 		erroJSON(w, http.StatusBadGateway, "Não deu para transcrever: "+err.Error())
 		return
@@ -62,15 +67,15 @@ func (a *app) handleTranscrever(w http.ResponseWriter, r *http.Request) {
 }
 
 // transcrever tenta o Mac (se ele responde) e, por falha de rede ou serviço fora, a reserva.
-func (a *app) transcrever(ctx context.Context, audio []byte, nome string) (string, error) {
+func (a *app) transcrever(ctx context.Context, audio []byte, nome, prompt string) (string, error) {
 	if a.cfg.whisper != "" && (a.cfg.whisperReserva == "" || a.whisperNoAr(ctx, a.cfg.whisper)) {
-		texto, err := pedirAoWhisper(ctx, a.cfg.whisper, modeloDoMac, audio, nome)
+		texto, err := pedirAoWhisper(ctx, a.cfg.whisper, modeloDoMac, audio, nome, prompt)
 		var erroDeRede net.Error
 		if err == nil || a.cfg.whisperReserva == "" || ctx.Err() != nil || !(errors.As(err, &erroDeRede) || errors.Is(err, errWhisperFora)) {
 			return texto, err
 		}
 	}
-	return pedirAoWhisper(ctx, a.cfg.whisperReserva, modeloDaReserva, audio, nome)
+	return pedirAoWhisper(ctx, a.cfg.whisperReserva, modeloDaReserva, audio, nome, prompt)
 }
 
 // whisperNoAr: o Mac desligado não responde, e a conexão ficaria pendurada; pergunta antes, rápido.
@@ -89,7 +94,7 @@ func (a *app) whisperNoAr(ctx context.Context, base string) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func pedirAoWhisper(ctx context.Context, base, modelo string, audio []byte, nome string) (string, error) {
+func pedirAoWhisper(ctx context.Context, base, modelo string, audio []byte, nome, prompt string) (string, error) {
 	if nome == "" {
 		nome = "fala.webm"
 	}
@@ -100,7 +105,7 @@ func pedirAoWhisper(ctx context.Context, base, modelo string, audio []byte, nome
 	mw.WriteField("model", modelo)
 	mw.WriteField("language", "pt")
 	mw.WriteField("response_format", "json")
-	mw.WriteField("prompt", contextoDaFala)
+	mw.WriteField("prompt", prompt)
 	mw.Close()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/audio/transcriptions", &corpo)
 	if err != nil {
