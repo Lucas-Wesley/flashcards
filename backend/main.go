@@ -201,7 +201,7 @@ CREATE INDEX IF NOT EXISTS revisoes_dia ON revisoes (baralho_id, revisado_em);
 -- Pedidos de baralho à IA: entram na fila, viram uma proposta e esperam a revisão do Lucas.
 CREATE TABLE IF NOT EXISTS geracoes (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
-	origem       TEXT NOT NULL DEFAULT 'ia', -- 'ia' (pedido à IA), 'link' (frases de uma página) ou 'acervo' (um texto do Acervo)
+	origem       TEXT NOT NULL DEFAULT 'ia', -- 'ia' (pedido à IA), 'link' (frases de uma página) 'acervo' (um texto do Acervo), 'biblioteca' (uma marcação) ou 'trilha' (a lição de uma etapa da Trilha)
 	pedido       TEXT NOT NULL, -- o pedido à IA, o link, ou o nome do texto do Acervo
 	quantidade   INTEGER NOT NULL,
 	tipo         TEXT NOT NULL,

@@ -587,7 +587,7 @@ func (a *app) handleGeracoes(w http.ResponseWriter, r *http.Request) {
 		[]any{naFila, rodando, emRevisao, falhou}
 	if b := r.URL.Query().Get("baralho"); b != "" {
 		consulta, args = `SELECT `+colunasGeracao+` FROM geracoes
-			WHERE origem IN ('ia', 'acervo') AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
+			WHERE origem IN ('ia', 'acervo', 'trilha') AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
 	}
 	rows, err := a.db.QueryContext(r.Context(), consulta, args...)
 	if err != nil {
@@ -738,7 +738,7 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 				instrucao = CASE WHEN ? THEN ? ELSE instrucao END,
 				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
 				resultado = ''
-			WHERE id = ? AND origem IN ('ia', 'acervo', 'biblioteca', 'link') AND estado IN (?, ?, ?, ?, ?)`,
+			WHERE id = ? AND origem IN ('ia', 'acervo', 'biblioteca', 'trilha', 'link') AND estado IN (?, ?, ?, ?, ?)`,
 			naFila, corpo.Pedido, corpo.Pedido, quantidade, quantidade, corpo.Instrucao != nil, instrucao, concluida,
 			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()

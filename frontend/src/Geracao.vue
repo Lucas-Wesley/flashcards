@@ -4,7 +4,7 @@ import BuscaDeImagem from './BuscaDeImagem.vue'
 import Microfone from './Microfone.vue'
 import { api } from './api.js'
 import { contextoDoCartao, termoDaBusca } from './busca.js'
-import { doLivro } from './fonte.js'
+import { daTrilha, doLivro } from './fonte.js'
 
 // Um pedido à IA ou um link: enquanto a IA trabalha, o andamento; depois, a proposta para revisar.
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
@@ -48,7 +48,9 @@ const NOMES = {
 
 const doLink = computed(() => g.value?.origem === 'link')
 // Do Acervo ou de uma marcação da Biblioteca: o texto veio pronto, e a IA só tira os cartões dele.
-const doAcervo = computed(() => ['acervo', 'biblioteca'].includes(g.value?.origem))
+const doAcervo = computed(() => ['acervo', 'biblioteca', 'trilha'].includes(g.value?.origem))
+// Da Trilha de Estudo (F44): a lição de uma etapa, tratada como um texto do Acervo.
+const daTrilhaDeEstudo = computed(() => g.value?.origem === 'trilha')
 const daMarcacao = computed(() => g.value?.origem === 'biblioteca')
 const trabalhando = computed(() => ['na_fila', 'rodando'].includes(g.value?.estado))
 const escolhidos = computed(() => cartoes.value.filter((c) => c.incluir))
@@ -227,14 +229,14 @@ onBeforeUnmount(() => clearTimeout(relogio))
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="g">
-      <h1>{{ doLink ? 'Cartões do link' : daMarcacao ? 'Cartão da marcação' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
+      <h1>{{ doLink ? 'Cartões do link' : daMarcacao ? 'Cartão da marcação' : daTrilhaDeEstudo ? 'Cartões da Trilha' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
       <p v-if="doLink" class="pedido link">
         <a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a>
         <button v-if="!trabalhando && !pedindoMais" type="button" class="botao editar" @click="abrirPedirMais">Pedir algo a mais</button>
       </p>
       <p v-else-if="doAcervo" class="pedido">
         {{ g.pedido }}
-        <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir {{ daMarcacao ? 'no livro' : 'no Acervo' }}</a>
+        <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir {{ daMarcacao ? 'no livro' : daTrilhaDeEstudo ? 'na Trilha' : 'no Acervo' }}</a>
         <button v-if="!trabalhando && g.estado !== 'em_revisao'" type="button" class="botao editar" @click="acao('refazer')">Refazer</button>
         <button v-if="!trabalhando && !pedindoMais" type="button" class="botao editar" @click="abrirPedirMais">Pedir algo a mais</button>
       </p>
@@ -376,7 +378,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
             <div class="campos">
               <div v-if="c.atualiza || c.fonte" class="chips">
                 <span v-if="c.atualiza" class="chip atualiza">Atualiza o que já existe</span>
-                <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : 'Texto no Acervo') }}</a>
+                <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : daTrilha(c.fonte) ? 'Etapa na Trilha' : 'Texto no Acervo') }}</a>
               </div>
 
               <ul v-if="c.avisos?.length" class="avisos-do-cartao">

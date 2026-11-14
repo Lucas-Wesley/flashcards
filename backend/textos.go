@@ -16,6 +16,10 @@ import (
 
 const origemAcervo = "acervo"
 
+// Trilha de Estudo (F44): a lição de uma etapa vira cartões como um texto do Acervo; muda só de
+// onde vem (o rótulo e o link de volta).
+const origemTrilha = "trilha"
+
 // Marcação da Biblioteca (F36): o texto é o trecho marcado (curto), e o contexto traz o livro, o
 // capítulo, a nota do Lucas e a página em volta. A IA tira poucos cartões, só do trecho.
 const (
@@ -26,7 +30,15 @@ const (
 
 // doTexto: o pedido traz um texto pronto (do Acervo ou de uma marcação), em vez de um pedido livre.
 func (g *geracao) doTexto() bool {
-	return g.Origem == origemAcervo || g.Origem == origemBiblioteca
+	return g.Origem == origemAcervo || g.Origem == origemBiblioteca || g.Origem == origemTrilha
+}
+
+// deOndeVem: como o pedido à IA apresenta o texto.
+func (g *geracao) deOndeVem() string {
+	if g.Origem == origemTrilha {
+		return "da lição de uma etapa de uma trilha de estudo (app Trilha de Estudo)"
+	}
+	return "de um texto do Acervo, a base de conhecimento dele"
 }
 
 // Um Tema inteiro pode ser grande; acima disso o Acervo pede para mandar por capítulo.
@@ -49,7 +61,7 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 		Link      string         `json:"link"` // o texto no Acervo
 		Secoes    []secaoDoTexto `json:"secoes"`
 		Tipo      string         `json:"tipo"`
-		Origem    string         `json:"origem"` // "acervo" (o padrão) ou "biblioteca"
+		Origem    string         `json:"origem"` // "acervo" (o padrão), "biblioteca" ou "trilha"
 		// Instrucao (F43): o foco e o jeito dos cartões que o Lucas escreveu ou falou ao pedir.
 		Instrucao string `json:"instrucao"`
 	}
@@ -74,7 +86,7 @@ func (a *app) handlePedirDoTexto(w http.ResponseWriter, r *http.Request) {
 		quantidade = cartoesDeLeitura
 	}
 	switch {
-	case corpo.Origem != origemAcervo && !marcacao:
+	case corpo.Origem != origemAcervo && corpo.Origem != origemTrilha && !marcacao:
 		erroJSON(w, http.StatusBadRequest, "Origem inválida.")
 		return
 	case corpo.Titulo == "":
@@ -189,10 +201,10 @@ func pedidoDoTexto(g *geracao, destino, pasta string) pedidoClaude {
 		return pedidoClaude{
 			pasta: pasta,
 			regra: "gerar-leitura.md",
-			instrucao: fmt.Sprintf("O Lucas quer flashcards de leitura de um texto do Acervo, a base de conhecimento dele.\n\n"+
+			instrucao: fmt.Sprintf("O Lucas quer flashcards de leitura %s.\n\n"+
 				"Texto: %q\n%s\n\nO texto vem junto com esta mensagem, entre <texto> e </texto>.\n\n"+
 				"Quantidade: um cartão; mais só se o texto mudar de assunto, no máximo %d.\n%s\n\nDevolva os dados no formato pedido.",
-				g.Pedido, g.Contexto, g.Quantidade, destino),
+				g.deOndeVem(), g.Pedido, g.Contexto, g.Quantidade, destino),
 			esquema:     esquemaProposta,
 			entrada:     "<texto>\n" + g.Texto + "\n</texto>\n",
 			semInternet: true,
@@ -201,10 +213,10 @@ func pedidoDoTexto(g *geracao, destino, pasta string) pedidoClaude {
 	return pedidoClaude{
 		pasta: pasta,
 		regra: "gerar-do-texto.md",
-		instrucao: fmt.Sprintf("O Lucas quer flashcards de um texto do Acervo, a base de conhecimento dele.\n\n"+
+		instrucao: fmt.Sprintf("O Lucas quer flashcards %s.\n\n"+
 			"Texto: %q\n%s\n\nO texto vem junto com esta mensagem, entre <texto> e </texto>.\n\n"+
 			"Quantidade: só o que vale virar cartão, no máximo %d notas.\nTipo das notas: %s.\n%s\n\nDevolva os dados no formato pedido.",
-			g.Pedido, g.Contexto, g.Quantidade, nomesDosTipos[g.Tipo], destino),
+			g.deOndeVem(), g.Pedido, g.Contexto, g.Quantidade, nomesDosTipos[g.Tipo], destino),
 		esquema:     esquemaProposta,
 		entrada:     "<texto>\n" + g.Texto + "\n</texto>\n",
 		semInternet: true,

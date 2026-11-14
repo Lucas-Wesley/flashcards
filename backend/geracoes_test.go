@@ -445,6 +445,15 @@ func TestCartoesDeUmTextoDoAcervo(t *testing.T) {
 		}
 		return g
 	}
+	// Da Trilha de Estudo (F44): a lição de uma etapa entra como um texto do Acervo.
+	tr := pedir(map[string]any{"baralho": "Rede", "origem": "trilha", "link": "https://trilha.internal/#/trilhas/1/etapas/2"})
+	if tr.Origem != origemTrilha || !tr.doTexto() || tr.Quantidade != 22 {
+		t.Fatalf("pedido da Trilha: %+v", tr)
+	}
+	e.esperarGeracao(tr.ID, emRevisao)
+	if s := e.pedir("POST", "/api/textos", map[string]any{"titulo": "x", "texto": texto, "baralho": "H", "origem": "outra"}, nil); s != http.StatusBadRequest {
+		t.Errorf("origem desconhecida: %d", s)
+	}
 	// De leitura (F38): outra instrução, e no máximo 4 cartões, seja qual for o tamanho do texto.
 	l := pedir(map[string]any{"baralho": "História", "tipo": "leitura"})
 	if l.Tipo != "leitura" || l.Quantidade != cartoesDeLeitura {

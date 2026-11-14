@@ -30,8 +30,9 @@ Mesma infraestrutura e mesmo design system (`docs/DESIGN-SYSTEM.md`) da Bibliote
   avisos nos cartões. Mudou o formato da proposta? A conferência lê os cartões por `cartoesParaConferir` (`conferir.go`).
 - **Links de qualquer site** (F31): um leitor só em `links.go`, sem nada específico de um site (nem no código, nem nos
   testes, nem na documentação); o que ele não lê, a IA tira do texto (`regras/extrair-exemplos.md`).
-- Integração com Biblioteca/Acervo só quando os dois lados existirem; **não definir o contrato comum antes**. O Acervo e a
-  Biblioteca já mandam textos (`POST /api/textos`, F28, F30, F36): mudar esse endpoint é mudar os três apps.
+- Integração com Biblioteca/Acervo só quando os dois lados existirem; **não definir o contrato comum antes**. O Acervo, a
+  Biblioteca e a Trilha de Estudo já mandam textos (`POST /api/textos`, F28, F30, F36, F44): mudar esse endpoint é mudar
+  os quatro apps.
 - A **extensão do Chrome** (repo `home-lab-plugin-web`) usa `POST /api/links` e `GET /api/baralhos`:
   mudar um deles é mudar a extensão também.
 - **Commits:** autoria do Lucas; **sem linha `Co-Authored-By`**.
