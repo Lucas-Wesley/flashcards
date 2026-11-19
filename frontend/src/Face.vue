@@ -1,4 +1,5 @@
 <script setup>
+import { ref, watch } from 'vue'
 import Icone from './Icone.vue'
 import { ondeAbre } from './fonte.js'
 
@@ -13,12 +14,29 @@ const props = defineProps({
 })
 const emit = defineEmits(['tocar'])
 const leitura = () => props.cartao.tipo === 'leitura'
+
+// Com o áudio na pergunta, o texto da frente fica borrado: primeiro se ouve, depois um toque
+// revela (F47). Mostrar a resposta também revela; cada cartão novo volta borrado.
+const revelado = ref(false)
+watch(() => props.cartao.id, () => (revelado.value = false))
+const borrado = () => props.audioNaPergunta && !revelado.value && !props.mostrando
 </script>
 
 <template>
   <section class="face" :class="{ leitura: leitura() }">
     <img v-if="cartao.imagem_frente" class="foto da-frente" :src="`/api/imagens/${cartao.imagem_frente}`" alt="" />
-    <div class="frente texto-cartao" :class="{ legenda: cartao.imagem_frente }">{{ cartao.frente }}</div>
+    <button
+      v-if="borrado()"
+      type="button"
+      class="frente texto-cartao borrado"
+      :class="{ legenda: cartao.imagem_frente }"
+      aria-label="Revelar o texto"
+      title="Toque para ver o texto"
+      @click="revelado = true"
+    >
+      <span aria-hidden="true">{{ cartao.frente }}</span>
+    </button>
+    <div v-else class="frente texto-cartao" :class="{ legenda: cartao.imagem_frente }">{{ cartao.frente }}</div>
     <button v-if="audioNaPergunta" class="botao icone som" aria-label="Ouvir de novo" title="Ouvir de novo (R)" @click="emit('tocar')"><Icone nome="som" /></button>
     <template v-if="mostrando">
       <hr />
@@ -57,6 +75,27 @@ const leitura = () => props.cartao.tipo === 'leitura'
   margin-top: 18px;
   color: var(--texto-suave);
   font-size: clamp(1.05rem, 2.6vw, 1.25rem);
+}
+
+/* Ouvir antes de ler: o texto borrado é um botão que o revela. */
+.borrado {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+}
+
+.borrado span {
+  filter: blur(9px);
+  transition: filter 0.15s;
+}
+
+.borrado:hover span {
+  filter: blur(7px);
 }
 
 .foto.da-frente {

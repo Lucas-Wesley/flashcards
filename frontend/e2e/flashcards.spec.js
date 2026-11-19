@@ -408,6 +408,26 @@ test('frases de um filme chegam do Streaming e o áudio entra depois', async ({ 
   await request.post(`http://localhost:8095/api/geracoes/${g.id}/audios`, { data: { audios: [{ fonte: fonte(10), audio: nome }, { fonte: fonte(20) }] } })
   await expect(page.getByText('Áudio chegando')).toHaveCount(0, { timeout: 20000 })
   await expect(page.getByLabel('Áudio do cartão 1')).toBeVisible()
+  // Com o áudio, a frente fica borrada até um toque (F47); a que ficou sem áudio aparece de cara.
+  await expect(page.getByRole('button', { name: 'Revelar a frente do cartão 2' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Revelar a frente do cartão 1' }).click()
+  await expect(page.locator('p.p-frente').first()).toHaveText("I'll figure it out.")
   await page.getByRole('button', { name: 'Adicionar 2 ao baralho' }).click()
   await expect(page.getByText(/2 notas criadas/)).toBeVisible()
+})
+
+test('com áudio na pergunta, o texto fica borrado até um toque', async ({ page, request }) => {
+  const b = await (await request.post('http://localhost:8095/api/baralhos', { data: { nome: 'Ouvir primeiro' } })).json()
+  const mp3 = Buffer.concat([Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00', 'latin1'), Buffer.alloc(256, 0xff)])
+  const { nome } = await (await request.post('http://localhost:8095/api/audios', { multipart: { arquivo: { name: 'fala.mp3', mimeType: 'audio/mpeg', buffer: mp3 } } })).json()
+  await request.post('http://localhost:8095/api/notas', { data: { baralho_id: b.id, tipo: 'basico', frente: 'Keep it down.', verso: 'Fale mais baixo.', audio: nome } })
+
+  await page.goto(`/#/estudar/${b.id}`)
+  const revelar = page.getByRole('button', { name: 'Revelar o texto' })
+  await expect(revelar).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ouvir de novo' })).toBeVisible()
+  await expect(page.locator('.borrado span')).toHaveCSS('filter', /blur/)
+  await revelar.click()
+  await expect(revelar).toHaveCount(0)
+  await expect(page.locator('.frente')).toHaveText('Keep it down.')
 })

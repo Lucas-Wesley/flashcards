@@ -23,6 +23,12 @@ const nome = ref('')
 const cartoes = ref([]) // cópia editável da proposta, com "incluir"
 const buscandoEm = ref(null) // { i, lado }: o cartão e o lado ('frente' ou 'verso') com a busca de imagem aberta
 const editandoCartao = ref(-1)
+// Cartão com áudio: a frente fica borrada até um toque, para ouvir antes de ler (F47).
+const revelados = ref(new Set())
+const borrado = (c, i) => !!c.audio_url && !revelados.value.has(i)
+function revelar(i) {
+  revelados.value = new Set(revelados.value).add(i)
+}
 const baralhos = ref([])
 const destino = ref('') // id do baralho, ou '' para um novo
 const enviando = ref(false)
@@ -429,7 +435,17 @@ onBeforeUnmount(() => clearTimeout(relogio))
                 <div class="previa" :class="{ leitura: g.tipo === 'leitura' }">
                   <img v-if="c.imagem_frente_url" class="img-frente" :src="c.imagem_frente_url" alt="" loading="lazy" />
                   <div class="textos">
-                    <p class="p-frente">{{ c.frente }}</p>
+                    <button
+                      v-if="borrado(c, i)"
+                      type="button"
+                      class="p-frente borrado"
+                      :aria-label="`Revelar a frente do cartão ${i + 1}`"
+                      title="Toque para ver o texto"
+                      @click="revelar(i)"
+                    >
+                      <span aria-hidden="true">{{ c.frente }}</span>
+                    </button>
+                    <p v-else class="p-frente">{{ c.frente }}</p>
                     <p class="p-verso">{{ c.verso }}</p>
                     <audio v-if="c.audio_url" class="audio-previa" controls preload="none" :src="c.audio_url" :aria-label="`Áudio do cartão ${i + 1}`" />
                   </div>
@@ -665,6 +681,23 @@ onBeforeUnmount(() => clearTimeout(relogio))
   font-size: 1.02rem;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.borrado {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.borrado span {
+  filter: blur(7px);
 }
 
 .p-verso {
