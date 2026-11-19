@@ -17,7 +17,7 @@ const ESTADOS = {
   rejeitada: 'Descartado',
   cancelada: 'Cancelado',
 }
-const ORIGENS = { ia: 'Com IA', link: 'Do link', acervo: 'Do Acervo', biblioteca: 'Da Biblioteca' }
+const ORIGENS = { ia: 'Com IA', link: 'Do link', acervo: 'Do Acervo', biblioteca: 'Da Biblioteca', trilha: 'Da Trilha', pdf: 'Do PDF', streaming: 'Do Streaming' }
 const ABERTOS = ['na_fila', 'rodando', 'em_revisao', 'falhou']
 
 const abertos = computed(() => (geracoes.value || []).filter((g) => ABERTOS.includes(g.estado)))

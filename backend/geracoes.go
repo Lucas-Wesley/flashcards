@@ -72,6 +72,9 @@ type geracao struct {
 }
 
 func (g *geracao) podeRefazer() bool {
+	if g.Origem == origemStreaming {
+		return false // os cartões vieram prontos: refazer é no Streaming
+	}
 	if g.Origem != "link" {
 		return true
 	}
@@ -105,6 +108,8 @@ type cartaoProposto struct {
 	// As duas também podem apontar para um arquivo que o app já tem (/api/imagens/…, /api/audios/…):
 	// é o caso de um cartão que já existe e vai ser atualizado.
 	AudioURL string `json:"audio_url"`
+	// AudioPendente (F45): o app que mandou a proposta ainda vai mandar o áudio deste cartão.
+	AudioPendente bool `json:"audio_pendente,omitempty"`
 	// Atualiza: o baralho já tem um cartão com esta frente; aprovar muda o verso dele (e o resto)
 	// sem perder o histórico de estudo.
 	Atualiza bool `json:"atualiza"`
@@ -355,6 +360,9 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	if g.doTexto() {
 		pedido = pedidoDoTexto(g, destino, pasta)
 	}
+	if g.Origem == origemPDF {
+		pedido = pedidoDoPDF(g, destino, pasta)
+	}
 	pedido.instrucao += g.textoDaInstrucao()
 	if g.Origem == "link" {
 		return a.escolherExemplos(ctx, g, pasta)
@@ -412,8 +420,8 @@ func (a *app) gerar(ctx context.Context, g *geracao) (*proposta, error) {
 	}
 
 	a.buscarFotosDaProposta(ctx, p.Cartoes)
-	// Os cartões de um texto do Acervo ou de uma marcação saem só do texto, que a conferência não lê.
-	if !g.doTexto() {
+	// Os cartões de um texto do Acervo, de uma marcação ou de um PDF saem só do texto, que a conferência não lê.
+	if !g.doTexto() && g.Origem != origemPDF {
 		a.conferir(ctx, g, &p, pasta)
 	}
 	return &p, nil
@@ -587,7 +595,7 @@ func (a *app) handleGeracoes(w http.ResponseWriter, r *http.Request) {
 		[]any{naFila, rodando, emRevisao, falhou}
 	if b := r.URL.Query().Get("baralho"); b != "" {
 		consulta, args = `SELECT `+colunasGeracao+` FROM geracoes
-			WHERE origem IN ('ia', 'acervo', 'trilha') AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
+			WHERE origem IN ('ia', 'acervo', 'trilha', 'pdf', 'streaming') AND (resultado = ? OR baralho_id = ?) ORDER BY id DESC LIMIT 20`, []any{b, b}
 	}
 	rows, err := a.db.QueryContext(r.Context(), consulta, args...)
 	if err != nil {
@@ -738,7 +746,7 @@ func (a *app) handleAcaoGeracao(w http.ResponseWriter, r *http.Request) {
 				instrucao = CASE WHEN ? THEN ? ELSE instrucao END,
 				baralho_id = CASE WHEN estado = ? AND baralho_id = '' AND resultado IN (SELECT id FROM baralhos) THEN resultado ELSE baralho_id END,
 				resultado = ''
-			WHERE id = ? AND origem IN ('ia', 'acervo', 'biblioteca', 'trilha', 'link') AND estado IN (?, ?, ?, ?, ?)`,
+			WHERE id = ? AND origem IN ('ia', 'acervo', 'biblioteca', 'trilha', 'link', 'pdf') AND estado IN (?, ?, ?, ?, ?)`,
 			naFila, corpo.Pedido, corpo.Pedido, quantidade, quantidade, corpo.Instrucao != nil, instrucao, concluida,
 			id, falhou, cancelada, rejeitada, emRevisao, concluida)
 		a.fila.avisar()
@@ -811,6 +819,7 @@ func (a *app) handleAprovar(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "Dê um nome ao baralho.")
 		return
 	}
+	audiosQueChegaram(g.Proposta, corpo.Cartoes)
 	// Áudio só dos endereços que vieram na proposta (os que o leitor achou na página do link).
 	audios := map[string]bool{}
 	if g.Proposta != nil {

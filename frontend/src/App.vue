@@ -15,6 +15,7 @@ import Importar from './Importar.vue'
 import Instrucao from './Instrucao.vue'
 import Link from './Link.vue'
 import NovoBaralho from './NovoBaralho.vue'
+import Pdf from './Pdf.vue'
 import Pedidos from './Pedidos.vue'
 import { api } from './api.js'
 
@@ -42,7 +43,7 @@ const MENU = [
 const secao = computed(() => {
   const n = rota.value.nome
   if (['baralho', 'importar', 'estudar', 'aleatorio'].includes(n)) return 'baralhos'
-  if (['link', 'gerar', 'novo-baralho'].includes(n)) return 'adicionar'
+  if (['link', 'pdf', 'gerar', 'novo-baralho'].includes(n)) return 'adicionar'
   if (n === 'geracao') return 'pedidos'
   if (n === 'nota') return 'cartoes'
   return n
@@ -150,6 +151,7 @@ onBeforeUnmount(() => {
       <Cartoes v-else-if="rota.nome === 'cartoes'" :key="rota.param" :baralho="rota.param" />
       <Gerar v-else-if="rota.nome === 'gerar'" :key="'gerar' + rota.param" :baralho="rota.param" />
       <Link v-else-if="rota.nome === 'link'" :key="'link' + rota.param" :link="rota.param" />
+      <Pdf v-else-if="rota.nome === 'pdf'" />
       <Geracao v-else-if="rota.nome === 'geracao'" :key="rota.param" :id="rota.param" />
       <Pedidos v-else-if="rota.nome === 'pedidos'" />
       <NovoBaralho v-else-if="rota.nome === 'novo-baralho'" />

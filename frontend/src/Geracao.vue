@@ -4,7 +4,7 @@ import BuscaDeImagem from './BuscaDeImagem.vue'
 import Microfone from './Microfone.vue'
 import { api } from './api.js'
 import { contextoDoCartao, termoDaBusca } from './busca.js'
-import { daTrilha, doLivro } from './fonte.js'
+import { daTrilha, doLivro, doStreaming } from './fonte.js'
 
 // Um pedido à IA ou um link: enquanto a IA trabalha, o andamento; depois, a proposta para revisar.
 // Cada cartão pode ser editado, tirado ou ter a foto trocada; só os marcados entram no baralho.
@@ -48,7 +48,12 @@ const NOMES = {
 
 const doLink = computed(() => g.value?.origem === 'link')
 // Do Acervo ou de uma marcação da Biblioteca: o texto veio pronto, e a IA só tira os cartões dele.
-const doAcervo = computed(() => ['acervo', 'biblioteca', 'trilha'].includes(g.value?.origem))
+const doAcervo = computed(() => ['acervo', 'biblioteca', 'trilha', 'pdf'].includes(g.value?.origem))
+// Um PDF com cartões (F46): tratado como um texto pronto.
+const doPdf = computed(() => g.value?.origem === 'pdf')
+// Frases de um filme (F45): vêm prontas do Streaming; o áudio de cada uma chega depois.
+const doFilme = computed(() => g.value?.origem === 'streaming')
+const esperandoAudio = computed(() => cartoes.value.filter((c) => c.audio_pendente && !c.audio_url).length)
 // Da Trilha de Estudo (F44): a lição de uma etapa, tratada como um texto do Acervo.
 const daTrilhaDeEstudo = computed(() => g.value?.origem === 'trilha')
 const daMarcacao = computed(() => g.value?.origem === 'biblioteca')
@@ -74,6 +79,26 @@ async function carregar() {
   }
   clearTimeout(relogio)
   if (trabalhando.value) relogio = setTimeout(carregar, 3000)
+  else if (g.value?.estado === 'em_revisao' && esperandoAudio.value) relogio = setTimeout(trazerAudios, 15000)
+}
+
+// Os áudios que o Streaming mandou enquanto a tela estava aberta entram nos cartões, sem perder as edições.
+async function trazerAudios() {
+  try {
+    const novo = await api(`/api/geracoes/${props.id}`)
+    const porFonte = new Map((novo.proposta?.cartoes || []).map((c) => [c.fonte, c]))
+    for (const c of cartoes.value) {
+      const n = porFonte.get(c.fonte)
+      if (c.audio_pendente && n && !n.audio_pendente) {
+        c.audio_pendente = false
+        if (!c.audio_url) c.audio_url = n.audio_url
+      }
+    }
+  } catch {
+    // Tenta de novo na próxima.
+  }
+  clearTimeout(relogio)
+  if (esperandoAudio.value) relogio = setTimeout(trazerAudios, 15000)
 }
 
 const semAcento = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
@@ -183,6 +208,7 @@ function marcarTodos() {
 // A quantidade do pedido: em branco (0), a IA decidiu.
 const textoDaQuantidade = computed(() => {
   if (doLink.value) return g.value.quantidade && g.value.quantidade !== 3 ? `${g.value.quantidade} frases · ` : ''
+  if (doPdf.value || doFilme.value) return ''
   if (doAcervo.value) return `até ${g.value.quantidade} · `
   return g.value.quantidade ? `cerca de ${g.value.quantidade} · ` : ''
 })
@@ -229,10 +255,14 @@ onBeforeUnmount(() => clearTimeout(relogio))
     <div v-if="erro" class="aviso erro">{{ erro }}</div>
 
     <template v-if="g">
-      <h1>{{ doLink ? 'Cartões do link' : daMarcacao ? 'Cartão da marcação' : daTrilhaDeEstudo ? 'Cartões da Trilha' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
+      <h1>{{ doLink ? 'Cartões do link' : daMarcacao ? 'Cartão da marcação' : daTrilhaDeEstudo ? 'Cartões da Trilha' : doPdf ? 'Cartões do PDF' : doFilme ? 'Frases do Streaming' : doAcervo ? 'Cartões do Acervo' : 'Gerar com IA' }}</h1>
       <p v-if="doLink" class="pedido link">
         <a :href="g.pedido" target="_blank" rel="noopener">{{ g.pedido }}</a>
         <button v-if="!trabalhando && !pedindoMais" type="button" class="botao editar" @click="abrirPedirMais">Pedir algo a mais</button>
+      </p>
+      <p v-else-if="doFilme" class="pedido">
+        {{ g.pedido }}
+        <a v-if="g.link" class="botao editar" :href="g.link" target="_blank" rel="noopener">Abrir no Streaming</a>
       </p>
       <p v-else-if="doAcervo" class="pedido">
         {{ g.pedido }}
@@ -299,7 +329,7 @@ onBeforeUnmount(() => clearTimeout(relogio))
         <span class="chip" :class="{ andando: trabalhando || g.estado === 'em_revisao', ok: g.estado === 'concluida', erro: g.estado === 'falhou' }">{{
           NOMES[g.estado]
         }}</span>
-        {{ textoDaQuantidade }}{{ g.tipo === 'invertido' ? 'nos dois sentidos' : g.tipo === 'leitura' ? 'de leitura' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
+        {{ textoDaQuantidade }}{{ g.tipo === 'invertido' ? 'nos dois sentidos' : g.tipo === 'leitura' ? 'de leitura' : 'frente e verso' }} · {{ doLink ? 'lido' : doAcervo || doFilme ? 'enviado' : 'pedido' }} em {{ hora(g.criado_em) }}
       </p>
 
       <template v-if="trabalhando">
@@ -311,6 +341,8 @@ onBeforeUnmount(() => clearTimeout(relogio))
                 ? `Ela lê as frases da página e escolhe as ${g.quantidade || 3} mais didáticas; costuma levar menos de um minuto.`
                 : daMarcacao
                   ? 'Ela lê o trecho marcado e monta a frente e o verso; costuma levar um ou dois minutos.'
+                  : doPdf
+                  ? 'Ela lê o PDF e passa os cartões que ele traz; costuma levar um ou dois minutos.'
                   : doAcervo
                   ? 'Ela lê o texto e escolhe o que vale virar cartão; costuma levar alguns minutos.'
                   : 'Ela pesquisa para conferir os fatos; costuma levar alguns minutos.'
@@ -342,6 +374,11 @@ onBeforeUnmount(() => clearTimeout(relogio))
             <span>{{ conferencia.resumo }}</span>
             <span v-if="conferencia.faltando?.length" class="faltando"><strong>Faltando:</strong> {{ conferencia.faltando.join(', ') }}.</span>
           </template>
+        </div>
+        <p v-if="doFilme && g.contexto" class="suave">{{ g.contexto }}</p>
+        <div v-if="esperandoAudio" class="aviso observacoes">
+          {{ esperandoAudio === 1 ? '1 frase ainda sem áudio' : `${esperandoAudio} frases ainda sem áudio` }}: o Streaming corta cada fala do vídeo quando a
+          conexão estiver livre e manda para cá. Pode aprovar já: o áudio entra no cartão quando chegar.
         </div>
         <div v-if="g.proposta.observacoes" class="aviso observacoes"><strong v-if="!doLink">Da IA: </strong>{{ g.proposta.observacoes }}</div>
 
@@ -376,9 +413,12 @@ onBeforeUnmount(() => clearTimeout(relogio))
           <li v-for="(c, i) in cartoes" v-show="!soComAviso || c.avisos?.length" :key="i" class="proposto" :class="{ fora: !c.incluir }">
             <input v-model="c.incluir" type="checkbox" class="marcar" :aria-label="`Incluir o cartão ${i + 1}`" />
             <div class="campos">
-              <div v-if="c.atualiza || c.fonte" class="chips">
+              <div v-if="c.atualiza || c.fonte || (c.audio_pendente && !c.audio_url)" class="chips">
                 <span v-if="c.atualiza" class="chip atualiza">Atualiza o que já existe</span>
-                <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{ c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : daTrilha(c.fonte) ? 'Etapa na Trilha' : 'Texto no Acervo') }}</a>
+                <a v-if="c.fonte" class="chip" :href="c.fonte" target="_blank" rel="noopener">{{
+                  c.secao || (doLivro(c.fonte) ? 'Trecho no livro' : daTrilha(c.fonte) ? 'Etapa na Trilha' : doStreaming(c.fonte) ? 'Fala no Streaming' : 'Texto no Acervo')
+                }}</a>
+                <span v-if="c.audio_pendente && !c.audio_url" class="chip">Áudio chegando</span>
               </div>
 
               <ul v-if="c.avisos?.length" class="avisos-do-cartao">

@@ -37,6 +37,8 @@ case "$prompt" in *"Tire até 3 frases de exemplo"*)
   case "$entrada" in *"[áudio 1]"*) [[ "$entrada" != *"Menu do site"* && "$entrada" != *"não é texto"* ]] && obs="$obs Recebeu o texto da página." ;; esac
   printf '{"type":"result","result":"","is_error":false,"structured_output":{"exemplos":[{"ingles":"**He told a joke to break the ice.**","traducao":"Ele contou uma piada para quebrar o gelo.","audio":1},{"ingles":"Let us break the ice.","traducao":"Vamos quebrar o gelo.","audio":7},{"ingles":"","traducao":"vazia","audio":0}],"phrasal_verb":false,"motivo":"%s"}}\n' "$obs"; exit 0 ;; esac
 case "$entrada" in *"<texto>"*"TEXTO DO ACERVO"*"</texto>"*) obs="$obs Recebeu o texto pela entrada." ;; esac
+case "$entrada" in *"<pdf>"*"--- página 1 ---"*"Hello there, friend."*"</pdf>"*) obs="$obs Recebeu o PDF pela entrada." ;; esac
+case "$prompt" in *"Instruções: cartões de um PDF"*) obs="$obs Seguiu a instrução do PDF." ;; esac
 case "$prompt" in *"Capítulos do texto (para o campo secao): \"Governo Lula\""*) obs="$obs Recebeu os capítulos." ;; esac
 case "$entrada" in *"<marcacao>"*"TRECHO MARCADO"*"</marcacao>"*) obs="$obs Recebeu a marcação pela entrada." ;; esac
 case "$prompt" in *"cartões de uma marcação da Biblioteca"*) obs="$obs Seguiu a instrução da marcação." ;; esac

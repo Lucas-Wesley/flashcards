@@ -343,3 +343,71 @@ test('no estudo, o menu ⋮ edita e exclui o cartão', async ({ page }) => {
   await expect(page.getByText('Cartão excluído.')).toBeVisible()
   await expect(page.locator('.frente')).toHaveText('Rio do Velho Chico')
 })
+
+// pdfDeTeste: um PDF de uma página com as linhas dadas (o mesmo do teste Go).
+function pdfDeTeste(linhas) {
+  const conteudo = `BT /F1 12 Tf 50 750 Td 16 TL\n${linhas.map((l) => `(${l}) Tj T*`).join('\n')}\nET`
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${conteudo.length} >>\nstream\n${conteudo}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]
+  let pdf = '%PDF-1.4\n'
+  const posicoes = objetos.map((o, i) => {
+    const p = pdf.length
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`
+    return p
+  })
+  const xref = pdf.length
+  pdf += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${posicoes.map((p) => `${String(p).padStart(10, '0')} 00000 n \n`).join('')}`
+  pdf += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(pdf, 'latin1')
+}
+
+test('sobe um PDF com cartões e a IA propõe os cartões dele', async ({ page }) => {
+  await page.goto('/#/pdf')
+  await expect(page.getByRole('link', { name: 'Do PDF' })).toHaveAttribute('aria-current', 'page')
+  await page.getByLabel('Arquivo PDF').setInputFiles({ name: 'Licao 01.pdf', mimeType: 'application/pdf', buffer: pdfDeTeste(['Hello there, friend.', 'Ola, amigo.']) })
+  await page.getByLabel('Baralho de destino').selectOption({ label: 'Inglês' })
+  await page.getByRole('button', { name: 'Tirar os cartões' }).click()
+  await expect(page.getByRole('heading', { name: 'Cartões do PDF' })).toBeVisible()
+  await expect(page.getByText('Proposta para revisar')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText(/Recebeu o PDF pela entrada/)).toBeVisible()
+})
+
+test('frases de um filme chegam do Streaming e o áudio entra depois', async ({ page, request }) => {
+  const baralhos = await (await request.get('http://localhost:8095/api/baralhos')).json()
+  const ingles = baralhos.find((b) => b.nome === 'Inglês')
+  const fonte = (t) => `https://streaming.internal/#/titulo/filme/9?fala=${t}`
+  const r = await request.post('http://localhost:8095/api/propostas', {
+    data: {
+      origem: 'streaming',
+      titulo: 'Frases de Filme Inventado',
+      link: 'https://streaming.internal/#/titulo/filme/9',
+      baralho_id: ingles.id,
+      contexto: '2 frases de 180 candidatas',
+      cartoes: [
+        { frente: "I'll figure it out.", verso: 'Eu vou dar um jeito.\n\nfigure out: resolver', tags: 'streaming', fonte: fonte(10), audio_pendente: true },
+        { frente: 'Keep me posted.', verso: 'Me mantenha informado.', tags: 'streaming', fonte: fonte(20), audio_pendente: true },
+      ],
+    },
+  })
+  const g = await r.json()
+  await page.goto(`/#/geracao/${g.id}`)
+  await expect(page.getByRole('heading', { name: 'Frases do Streaming' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Abrir no Streaming' })).toBeVisible()
+  await expect(page.getByText('2 frases ainda sem áudio')).toBeVisible()
+  await expect(page.getByText('Áudio chegando')).toHaveCount(2)
+  await expect(page.getByRole('link', { name: 'Fala no Streaming' })).toHaveCount(2)
+
+  // O Streaming manda o áudio da primeira e avisa que a segunda ficou sem.
+  const mp3 = Buffer.concat([Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00', 'latin1'), Buffer.alloc(256, 0xff)])
+  const { nome } = await (await request.post('http://localhost:8095/api/audios', { multipart: { arquivo: { name: 'fala.mp3', mimeType: 'audio/mpeg', buffer: mp3 } } })).json()
+  await request.post(`http://localhost:8095/api/geracoes/${g.id}/audios`, { data: { audios: [{ fonte: fonte(10), audio: nome }, { fonte: fonte(20) }] } })
+  await expect(page.getByText('Áudio chegando')).toHaveCount(0, { timeout: 20000 })
+  await expect(page.getByLabel('Áudio do cartão 1')).toBeVisible()
+  await page.getByRole('button', { name: 'Adicionar 2 ao baralho' }).click()
+  await expect(page.getByText(/2 notas criadas/)).toBeVisible()
+})

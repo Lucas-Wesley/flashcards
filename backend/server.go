@@ -39,9 +39,12 @@ func newServer(a *app, web fs.FS, version string) http.Handler {
 	mux.HandleFunc("POST /api/transcrever", a.handleTranscrever)
 	mux.HandleFunc("GET /api/geracoes/{id}", a.handleGeracao)
 	mux.HandleFunc("POST /api/geracoes/{id}/aprovar", a.handleAprovar)
+	mux.HandleFunc("POST /api/geracoes/{id}/audios", a.handleAudiosDaProposta)
 	mux.HandleFunc("POST /api/geracoes/{id}/{acao}", a.handleAcaoGeracao)
 	mux.HandleFunc("DELETE /api/geracoes/{id}", a.handleExcluirGeracao)
 	mux.HandleFunc("POST /api/textos", a.handlePedirDoTexto)
+	mux.HandleFunc("POST /api/propostas", a.handleProposta)
+	mux.HandleFunc("POST /api/pdfs", a.handlePedirDoPDF)
 
 	mux.HandleFunc("POST /api/links", a.handleLink)
 

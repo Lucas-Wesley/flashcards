@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION}" -o /app .
 
 # O Node fica na imagem final: o Claude Code, que gera os baralhos, roda nele (como no Acervo).
 FROM node:24-alpine
-RUN apk add --no-cache ripgrep libgcc libstdc++ \
+RUN apk add --no-cache ripgrep libgcc libstdc++ poppler-utils \
  && npm install -g @anthropic-ai/claude-code \
  && npm cache clean --force
 COPY --from=api /app /app

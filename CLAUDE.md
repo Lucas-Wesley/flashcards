@@ -3,7 +3,7 @@
 App do **ecossistema de apps pessoais do Lucas**: flashcards com repetição espaçada, no estilo do
 Anki, simplificado. É o **3º app** (depois da Biblioteca Digital e do Acervo; ver ROADMAP do Hub).
 
-**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F43) e próximos passos.
+**Comece lendo:** [`docs/DECISOES.md`](docs/DECISOES.md) — estado atual, decisões (F1–F46) e próximos passos.
 
 ## Em uma frase
 Baralhos (agrupados por tema) → notas (frente e verso, nos dois sentidos ou de leitura) → cartões agendados pelo **FSRS-6**
@@ -35,4 +35,8 @@ Mesma infraestrutura e mesmo design system (`docs/DESIGN-SYSTEM.md`) da Bibliote
   os quatro apps.
 - A **extensão do Chrome** (repo `home-lab-plugin-web`) usa `POST /api/links` e `GET /api/baralhos`:
   mudar um deles é mudar a extensão também.
+- O **Streaming** manda as frases de um filme por `POST /api/propostas` e os áudios delas por
+  `POST /api/geracoes/{id}/audios` (F45; S49 de lá): mudar um deles é mudar o Streaming também. A `fonte` identifica o cartão.
+- **PDF** (F46): o texto sai pelo `pdftotext` (`poppler-utils` no Dockerfile); nos testes, um PDF montado no próprio teste
+  (`pdfDeTeste`), sem material de curso no repositório.
 - **Commits:** autoria do Lucas; **sem linha `Co-Authored-By`**.

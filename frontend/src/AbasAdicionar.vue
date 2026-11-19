@@ -5,6 +5,7 @@ defineProps({ atual: { type: String, required: true } })
 const ABAS = [
   { rota: 'adicionar', nome: 'Escrever' },
   { rota: 'link', nome: 'Do link' },
+  { rota: 'pdf', nome: 'Do PDF' },
   { rota: 'gerar', nome: 'Com IA' },
   { rota: 'novo-baralho', nome: 'Baralho novo' },
 ]

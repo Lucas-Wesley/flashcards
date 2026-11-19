@@ -29,6 +29,7 @@ var instrucoes = []instrucao{
 	{Arquivo: "gerar-da-marcacao.md", Nome: "Cartões de uma marcação da Biblioteca", Descricao: "Como a IA faz o cartão de um trecho que você marcou num livro: em geral um só, sobre o trecho; a sua nota manda; vocabulário em livro de outro idioma, a ideia em livro de conteúdo."},
 	{Arquivo: "escolher-exemplos.md", Nome: "Exemplos de um link", Descricao: "Como a IA escolhe as frases mais didáticas (3, ou quantas você pedir) de uma página que já mostra as frases com tradução: um sentido por frase, frases naturais e claras; as frases e os áudios ficam os da página."},
 	{Arquivo: "extrair-exemplos.md", Nome: "Exemplos tirados de uma página", Descricao: "Como a IA tira as frases de exemplo (até 3, ou quantas você pedir), com a tradução e o áudio, de uma página que não as mostra do jeito comum: as frases que a própria página usa, a tradução dela quando houver."},
+	{Arquivo: "extrair-do-pdf.md", Nome: "Cartões de um PDF", Descricao: "Como a IA tira os cartões de um PDF que já os traz (frase e tradução, frente e verso, listas de frases, como os de um curso): os cartões como estão no PDF, sem inventar frase nem tradução; a nota que explica uma frase vai no verso dela; sem repetir o que aparece duas vezes."},
 }
 
 func instrucaoConhecida(arquivo string) (instrucao, bool) {

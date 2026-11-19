@@ -29,6 +29,8 @@ type pedidoClaude struct {
 	entrada   string // texto longo que vai pela entrada padrão (o de um texto do Acervo), fora do limite de um argumento
 	// semInternet: os cartões saem só do texto recebido; nem a internet fica liberada.
 	semInternet bool
+	// modelo: o desta tarefa, no lugar do padrão do app (o PDF usa o Haiku, F46).
+	modelo string
 }
 
 type respostaClaude struct {
@@ -55,8 +57,8 @@ func (a *app) chamarClaude(ctx context.Context, p pedidoClaude) (respostaClaude,
 	if p.esquema != "" {
 		args = append(args, "--json-schema", p.esquema)
 	}
-	if a.cfg.modelo != "" {
-		args = append(args, "--model", a.cfg.modelo)
+	if modelo := primeiro(p.modelo, a.cfg.modelo); modelo != "" {
+		args = append(args, "--model", modelo)
 	}
 
 	cmd := exec.CommandContext(ctx, a.cfg.claude, args...)
